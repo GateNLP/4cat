@@ -18,7 +18,7 @@ from common.lib.exceptions import QueryParametersException, ProcessorInterrupted
 from common.lib.helpers import convert_to_int, UserInput
 
 from datetime import datetime
-from telethon import TelegramClient
+from telethon import TelegramClient, utils, types
 from telethon.errors.rpcerrorlist import UsernameInvalidError, TimeoutError, ChannelPrivateError, BadRequestError, \
     FloodWaitError, ApiIdInvalidError, PhoneNumberInvalidError
 from telethon.tl.functions.channels import GetFullChannelRequest
@@ -139,8 +139,20 @@ class SearchTelegram(Search):
             "type": UserInput.OPTION_TOGGLE,
             "help": "Include actions",
             "default": False,
+        },
+        "retrieve-replies-intro": {
+            "type": UserInput.OPTION_INFO,
+            "help": "Some public channels have linked discussion groups where users can comment/reply to posts made "
+                    "in the original channel. Enabling this option allows you to check if a channel has a publicly "
+                    "available linked discussion group and collect data from here too. Note that replies are collected "
+                    "with the same parameters (dates, number of messages to collect) as the main channel. Enabling this "
+                    "will increase the size of your dataset."
+        },
+        "retrieve-replies": {
+            "type": UserInput.OPTION_TOGGLE,
+            "help": "Retrieve replies",
+            "default": False,
         }
-
     }
 
     def get_items(self, query):
@@ -270,6 +282,7 @@ class SearchTelegram(Search):
         """
         resolve_refs = self.parameters.get("resolve-entities")
         include_actions = self.parameters.get("include-actions")
+        retrieve_replies = self.parameters.get("retrieve-replies")
 
         # Adding flag to stop; using for rate limits
         no_additional_queries = False
@@ -280,6 +293,7 @@ class SearchTelegram(Search):
             delay = 10
             retries = 0
             processed += 1
+            reply_channel_added = False
             self.dataset.update_progress(processed / len(queries))
 
             if no_additional_queries:
@@ -292,6 +306,14 @@ class SearchTelegram(Search):
                 i = 0
                 try:
                     entity_posts = 0
+
+                    # if chat channels are added, they are id-ed using numeric id
+                    # this will fail if they are then formatted as a string on input
+                    try:
+                        query = int(query)
+                    except ValueError:
+                        pass
+
                     async for message in client.iter_messages(entity=query, offset_date=max_date):
                         entity_posts += 1
                         i += 1
@@ -306,6 +328,17 @@ class SearchTelegram(Search):
                         if (not include_actions) and (message.action is not None):
                             # e.g. someone joins the channel - not an actual message
                             continue
+
+                        if retrieve_replies and (not reply_channel_added) and (message.replies and
+                                                                               message.replies.channel_id):
+                            listed_reply_channel = message.replies.channel_id
+
+                            self.dataset.update_status("Reply channel '%s' found and added to process queue"
+                                                       % listed_reply_channel)
+
+                            channel_to_add = utils.get_peer_id(types.PeerChannel(message.replies.channel_id))
+                            queries.append(channel_to_add)
+                            reply_channel_added = True
 
                         # todo: possibly enrich object with e.g. the name of
                         # the channel a message was forwarded from (but that
@@ -830,6 +863,7 @@ class SearchTelegram(Search):
             "save-session": query.get("save-session"),
             "resolve-entities": query.get("resolve-entities"),
             "include-actions": query.get("include-actions"),
+            "retrieve-replies": query.get("retrieve-replies"),
             "min_date": min_date,
             "max_date": max_date
         }
