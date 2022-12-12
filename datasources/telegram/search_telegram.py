@@ -127,7 +127,20 @@ class SearchTelegram(Search):
             "type": UserInput.OPTION_TOGGLE,
             "help": "Resolve references",
             "default": False,
+        },
+        "include-actions-intro": {
+            "type": UserInput.OPTION_INFO,
+            "help": "4CAT can include actions which are not necessarily messages as part of the dataset. These occur "
+                    "whenever: a new chat is created, a chat’s title or photo is changed or removed, a new message is "
+                    "pinned, a user scores in a game, a user joins or is added to the group or a user is removed or "
+                    "leaves a group should it have less than 50 members or the removed user was a bot."
+        },
+        "include-actions": {
+            "type": UserInput.OPTION_TOGGLE,
+            "help": "Include actions",
+            "default": False,
         }
+
     }
 
     def get_items(self, query):
@@ -256,6 +269,7 @@ class SearchTelegram(Search):
         :return list:  List of messages, each message a dictionary.
         """
         resolve_refs = self.parameters.get("resolve-entities")
+        include_actions = self.parameters.get("include-actions")
 
         # Adding flag to stop; using for rate limits
         no_additional_queries = False
@@ -289,7 +303,7 @@ class SearchTelegram(Search):
                             self.dataset.update_status(
                                 "Retrieved %i posts for entity '%s' (%i total)" % (entity_posts, query, i))
 
-                        if message.action is not None:
+                        if (not include_actions) and (message.action is not None):
                             # e.g. someone joins the channel - not an actual message
                             continue
 
@@ -815,6 +829,7 @@ class SearchTelegram(Search):
             "api_phone": query.get("api_phone"),
             "save-session": query.get("save-session"),
             "resolve-entities": query.get("resolve-entities"),
+            "include-actions": query.get("include-actions"),
             "min_date": min_date,
             "max_date": max_date
         }
