@@ -1,0 +1,32 @@
+{% set item = filepath %}
+
+<ul>
+    <li>
+        <i class="fa fa-file" aria-hidden="true"></i>
+        <em> {{ item.name.split("-")[2] }}</em>
+    </li>
+    <li>
+        <a href="{{ url_for('get_result', query_file=item.name) }}">
+            <i class="fas fa-download" aria-hidden="true"></i>
+            {{ item.suffix[1:] }}
+        </a>
+    </li>
+    {% if dataset.get_extension() != "csv" and dataset.get_own_processor().map_item %}
+        <li>
+        <a href="{{ url_for('get_mapped_subfile_result', key=dataset.key, file=item.name) }}">
+            <i class="fas fa-download" aria-hidden="true"></i>
+            csv
+        </a>
+        </li>
+    {% endif %}
+    {% if dataset.get_extension() in ("csv", "gexf") or dataset.get_own_processor().map_item %}
+        <li>
+        <a href="{{ url_for('preview_subfile', key=dataset.key, file=item.name) }}"
+           data-load-from="{{ url_for('preview_subfile', key=dataset.key,  file=item.name) }}" class="popup-trigger"
+           aria-controls="popup-preview-{{ dataset.key }}">
+            <i class="fa fa-eye" aria-hidden="true"></i> Preview
+        </a>
+        <div role="dialog" id="popup-preview-{{ dataset.key }}"></div>
+        </li>
+    {% endif %}
+</ul>

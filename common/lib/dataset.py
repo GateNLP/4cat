@@ -115,7 +115,9 @@ class DataSet(FourcatModule):
 				"software_file": "",
 				"num_rows": 0,
 				"progress": 0.0,
-				"key_parent": parent
+				"key_parent": parent,
+				"is_continuous": False,
+				"num_files": 0
 			}
 			self.parameters = parameters
 
@@ -235,7 +237,7 @@ class DataSet(FourcatModule):
 				logmsg = ":".join(line.split(":")[1:])
 				yield (logtime, logmsg)
 
-	def iterate_items(self, processor=None, bypass_map_item=False):
+	def iterate_items(self, processor=None, bypass_map_item=False, subfile=None):
 		"""
 		A generator that iterates through a CSV or NDJSON file
 
@@ -263,7 +265,10 @@ class DataSet(FourcatModule):
 		`map_item` method of the datasource when returning items.
 		:return generator:  A generator that yields each item as a dictionary
 		"""
-		path = self.get_results_path()
+		if subfile:
+			path = subfile
+		else:
+			path = self.get_results_path()
 
 		# see if an item mapping function has been defined
 		# open question if 'source_dataset' shouldn't be an attribute of the dataset
@@ -1177,6 +1182,90 @@ class DataSet(FourcatModule):
 		url_to_file = ('https://' if config.get("flask.https") else 'http://') + \
 						config.get("flask.server_name") + '/result/' + filename
 		return url_to_file
+
+	# New methods for continuous collection change #
+	def mark_continuous(self):
+		"""
+		Marks a dataset as being a continuous runner (will not stop until user specifies)
+		"""
+		self.db.update("datasets", where={"key": self.data["key"]},data={"is_continuous": True})
+		self.data["is_continuous"] = True
+
+	def is_continuous(self):
+		"""
+		Check if dataset was a continuous collection
+		:return bool:
+		"""
+		return self.data["is_continuous"]
+
+	def get_num_files(self):
+		"""
+		Get Dataset number of subfiles
+
+		:return int: number of files
+		"""
+		return self.data["num_files"]
+
+	def increase_num_files(self):
+		"""
+		Increase file count for this dataset
+
+		:return int:  new file count for this dataset
+		"""
+
+		self.data["num_files"] = self.data["num_files"] + 1
+
+		self.db.update("datasets", where={"key": self.data["key"]}, data={"num_files": self.data["num_files"]})
+
+		return self.get_num_files()
+
+	def get_subfile_paths(self):
+		"""
+		Get path to individual results files in case of continuous collection
+
+		Will return a list of files based on the original file name and the
+		number of files which are listed to exist in the dataset
+
+		:return List:  A path to the results files
+		"""
+
+		file_paths = []
+		num_files = self.data["num_files"]
+		result_path = self.data["result_file"]
+		index_of_extension = result_path.index(".")
+
+		for i in range(num_files):
+			filename = result_path[:index_of_extension] + "-" + str(i+1) + result_path[index_of_extension:]
+			file_paths.append(self.folder.joinpath(filename))
+
+		return file_paths
+
+	def get_zip_path(self):
+		"""
+		Get path to zip file in the case of continuous collection
+
+		Returns the main result path with a zip extension
+
+		:return str:  A path to the results files
+		"""
+		result_path = self.data["result_file"]
+
+		file = self.folder.joinpath(result_path + ".zip")
+
+		return file
+
+	def iterate_subfile(self, subfile, processor=None, bypass_map_item=False):
+		"""
+		Runs the iterate_items method, but allows file iterated to be specified
+
+		:param str subfile: file to iterate
+		:param BasicProcessor processor:  A reference to the processor iterating the dataset.
+		:param bool bypass_map_item:  If set to `True`, this ignores any `map_item` method of the datasource when
+		returning items.
+		:return generator:  A generator that yields each item as a dictionary
+		"""
+
+		self.iterate_items(self, processor, bypass_map_item, subfile)
 
 	def __getattr__(self, attr):
 		"""

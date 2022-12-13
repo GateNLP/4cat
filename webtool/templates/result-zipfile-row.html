@@ -1,0 +1,24 @@
+{% set item = filepath %}
+
+{% if dataset.is_finished() and dataset.num_files < 1 %}
+    <i class="fa fa-skull" aria-hidden="true"></i> <em>No results.</em> {{ dataset.status }}
+
+{% elif not dataset.is_finished() %}
+    {% if dataset.num_files < 1 %}
+         <i class="fa fa-spinner" aria-hidden="true"></i> <em>No files yet...</em> {{ dataset.status }}
+    {% else %}
+        <ul>
+            <li>
+                <i class="fa fa-file-archive" aria-hidden="true"></i>
+                <em> {{ item.name.split("-")[0] + ".zip"  }}</em>
+            </li>
+            <li>
+                <a href="{{ url_for('get_result', query_file=item.name) }}">
+                    <i class="fas fa-download" aria-hidden="true"></i>
+                    {{ item.suffix[1:] }}
+                </a>
+            </li>
+        </ul>
+    {% endif %}
+{% endif %}
+

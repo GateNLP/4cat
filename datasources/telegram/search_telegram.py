@@ -1,6 +1,7 @@
 """
 Search Telegram via API
 """
+import functools
 import traceback
 import binascii
 import datetime
@@ -11,16 +12,18 @@ import time
 import re
 
 from pathlib import Path
+from zipfile import ZipFile
 
 from backend.abstract.search import Search
 from common.lib.exceptions import QueryParametersException, ProcessorInterruptedException, ProcessorException, \
     QueryNeedsFurtherInputException
 from common.lib.helpers import convert_to_int, UserInput
+from datasources.telegram.message_edited import ForwardedMessage
 
 from datetime import datetime
-from telethon import TelegramClient
+from telethon import TelegramClient, events
 from telethon.errors.rpcerrorlist import UsernameInvalidError, TimeoutError, ChannelPrivateError, BadRequestError, \
-    FloodWaitError, ApiIdInvalidError, PhoneNumberInvalidError
+    FloodWaitError, ApiIdInvalidError, PhoneNumberInvalidError, UsernameNotOccupiedError
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import User
@@ -97,6 +100,17 @@ class SearchTelegram(Search):
         "daterange": {
             "type": UserInput.OPTION_DATERANGE,
             "help": "Date range"
+        },
+        "continue-collection": {
+            "type": UserInput.OPTION_TOGGLE,
+            "help": "Continuous collection",
+            "default": False,
+            "tooltip": "Setting this option will mean that collection with continue until you actively stop it or the "
+                       "max date is passed (set this for far into the future if you don't know when collection will be "
+                       "stopped). If the min date is not set to \"today\", messages from prior to today will first be "
+                       "collected, then the processor will switch to listening out for new messages and some message "
+                       "updates. Note that the \"max items\" field will still apply per channel for existing messages "
+                       "(collected prior to today), but will be ignored when collecting new messages."
         },
         "divider-2": {
             "type": UserInput.OPTION_DIVIDER
@@ -211,6 +225,7 @@ class SearchTelegram(Search):
         parameters = self.dataset.get_parameters()
         queries = [query.strip() for query in parameters.get("query", "").split(",")]
         max_items = convert_to_int(parameters.get("items", 10), 10)
+        continue_collection = parameters.get("continue-collection")
 
         # Telethon requires the offset date to be a datetime date
         max_date = parameters.get("max_date")
@@ -232,13 +247,17 @@ class SearchTelegram(Search):
         try:
             async for post in self.gather_posts(client, queries, max_items, min_date, max_date):
                 posts.append(post)
+            if continue_collection:
+                self.dataset.mark_continuous()
+                cont_posts = await self.continuous_collection(client, queries, max_date, max_items)
+                posts = posts + cont_posts
             return posts
         except ProcessorInterruptedException as e:
             raise e
         except Exception as e:
             # catch-all so we can disconnect properly
             # ...should we?
-            self.dataset.update_status("Error scraping posts from Telegram")
+            self.dataset.update_status("Error scraping posts from Telegram %s" % e)
             self.log.error("Telegram scraping error: %s" % traceback.format_exc())
             return []
         finally:
@@ -814,6 +833,7 @@ class SearchTelegram(Search):
             "api_hash": query.get("api_hash"),
             "api_phone": query.get("api_phone"),
             "save-session": query.get("save-session"),
+            "continue-collection": query.get("continue-collection"),
             "resolve-entities": query.get("resolve-entities"),
             "min_date": min_date,
             "max_date": max_date
@@ -860,3 +880,178 @@ class SearchTelegram(Search):
                                              "Separate with commas or line breaks."
 
         return options
+
+    async def forward_message_handler(self, event, client, cont_posts):
+        """
+        Handler for telethon forwarded message event: serialize message, add to list of messages
+
+        :param ForwardedMessage event:  Telegram forward message event
+        :param TelegramClient client:  Telegram client
+        :param list cont_posts:  List of entities to query (as string)
+        """
+
+        self.dataset.update_status("Forwarded message found. Retrieving forwarded message")
+
+        try:
+            forwarded_message = await client.get_messages(event.channel_id, event.id)
+            serialized_message = SearchTelegram.serialize_obj(forwarded_message)
+            cont_posts.append(serialized_message)
+
+        except ValueError:
+            self.dataset.update_status("Could not find channel or message with ids %s and %s respectively"
+                                       % str(event.channel_id), str(event.id))
+
+        self.dataset.update_status("Forwarded message retrieved. Continuing to listen for new messages")
+
+    async def new_message_handler(self, event, cont_posts):
+        """
+        Handler for telethon new message event: serialize message, add to list of messages
+
+        :param NewMessage event:  Telegram new message event
+        :param list cont_posts:  List of entities to query (as string)
+        """
+
+        self.dataset.update_status("New message found. Retrieving new message.")
+
+        message = event.message
+        serialized_message = SearchTelegram.serialize_obj(message)
+        cont_posts.append(serialized_message)
+
+        self.dataset.update_status("Message retrieved. Continuing to listen for new messages...")
+
+    async def continuous_collection(self, client, queries, max_date, max_items):
+        """
+        Continuously gather messages for each entity for which messages are requested
+
+        :param TelegramClient client:  Telegram Client
+        :param list queries:  List of entities to query (as string)
+        :param int max_date:  Datetime date to get posts before
+        :param int max_items:  Maximum number of items per file
+        :return list:  List of messages, each message a dictionary.
+        """
+
+        queries_to_poll = []
+        continuous_posts = []
+        final_file_posts = []
+        delay = 10
+
+        self.dataset.update_status("Checking entities we would like to collect data from exist")
+
+        for query in queries:
+            try:
+                telegram_entity = await client.get_entity(query)
+                if telegram_entity:
+                    queries_to_poll.append(query)
+            except (ValueError, UsernameNotOccupiedError):
+                self.dataset.update_status("Could not poll entity '%s', does not seem to exist, skipping" % query)
+                self.flawless = False
+
+        if not queries_to_poll:
+            self.dataset.update_status("None of the listed entities could be found. Exiting collection")
+            return
+
+        self.dataset.update_status("Adding listeners for new and forwarded messages")
+
+        fmh_partial = functools.partial(self.forward_message_handler, cont_posts=continuous_posts, client=client)
+        nmh_partial = functools.partial(self.new_message_handler, cont_posts=continuous_posts)
+
+        client.add_event_handler(nmh_partial, events.NewMessage(chats=queries_to_poll))
+        client.add_event_handler(fmh_partial, ForwardedMessage(chats=queries_to_poll))
+
+        self.dataset.update_status("Listening for new messages")
+
+        while True:
+            try:
+                # https://stackoverflow.com/questions/61022878/how-to-run-a-thread-alongside-telethon-client
+                await asyncio.sleep(0.5)
+
+                if len(continuous_posts) >= max_items:
+                    await self.save_files(continuous_posts)
+                    final_file_posts = final_file_posts + continuous_posts
+                    continuous_posts.clear()
+
+                if self.interrupted == self.INTERRUPT_STOP:
+
+                    if len(continuous_posts):
+                        self.dataset.update_status("Saving latest messages before stopping collection")
+                        await self.save_files(continuous_posts)
+                        final_file_posts = final_file_posts + continuous_posts
+
+
+                    await self.save_to_zip_file()
+                    self.dataset.update_status("Stopping ongoing collection due to user request")
+                    self.interrupted = False
+                    break
+
+                if datetime.now() > max_date:
+                    self.dataset.update_status("Stopping ongoing collection due to requested max date: %s"
+                                               % str(max_date))
+                    break
+
+                elif self.interrupted:
+                    raise ProcessorInterruptedException(
+                        "Interrupted while fetching message data from the Telegram API")
+
+            # not sure if we want these
+            # plus, check if they fall within the scope of the client event loop anyway
+            except FloodWaitError as e:
+                self.dataset.update_status("Rate-limited by Telegram: %s; waiting" % str(e))
+                if e.seconds < self.end_if_rate_limited:
+                    time.sleep(e.seconds)
+                    continue
+                else:
+                    self.flawless = False
+                    self.dataset.update_status(
+                        "Telegram wait grown large than %i minutes, ending" % int(e.seconds / 60))
+                    break
+
+            except TimeoutError:
+                self.dataset.update_status(
+                    "Got a timeout from Telegram while fetching messages for entity '%s'. Trying again in %i seconds." % (
+                        query, delay))
+                time.sleep(delay)
+                delay *= 2
+                continue
+
+        return final_file_posts
+
+    async def save_files(self, items):
+        """
+        Save subfile to dataset
+
+        This method saves a given set of data as a subfile to the dataset. It increases
+        the number of files a dataset has by one, then creates a file with the main
+        dataset result path name, suffixed with the new number of files. In then saves
+        all given items to this dataset "subfile"
+
+        :params List items: items to save in subfile
+        """
+
+        results_file = self.dataset.get_results_path()
+        file_count = self.dataset.get_num_files() + 1
+        subfile_path = Path(str(results_file.parent) + "/" + results_file.stem + "-" + str(file_count) + results_file.suffix)
+
+        if items:
+            self.dataset.update_status("Writing currently collected data to dataset file")
+            if results_file.suffix == ".ndjson":
+                self.items_to_ndjson(items, subfile_path)
+            elif results_file.suffix == ".csv":
+                self.items_to_csv(items, subfile_path)
+            else:
+                raise NotImplementedError("Datasource query cannot be saved as %s file" % results_file.suffix)
+
+            self.dataset.increase_num_files()
+
+    async def save_to_zip_file(self):
+        """
+        Save subfiles to zipfile
+
+        Takes all dataset subfiles and zips them into a directory
+        This method should probably be moved to the worker
+        """
+        zip_obj = ZipFile(str(self.dataset.get_results_path()) + ".zip", 'w')
+
+        for i in self.dataset.get_subfile_paths():
+            zip_obj.write(i)
+
+        zip_obj.close()
