@@ -311,7 +311,7 @@ class Search(BasicProcessor, ABC):
 		processed = 0
 		with filepath.open("w", encoding="utf-8", newline="") as outfile:
 			for item in items:
-				if self.interrupted:
+				if self.interrupted and self.interrupted != self.INTERRUPT_STOP:
 					raise ProcessorInterruptedException("Interrupted while writing results to file")
 
 				# replace author column with salted hash of the author name, if
