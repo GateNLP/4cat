@@ -574,7 +574,7 @@ def nuke_dataset_interactive(key):
         return redirect(url_for('show_result', key=top_key))
 
 
-@app.route("/results/<string:key>/stop/", methods=["POST"])
+@app.route("/results/<string:key>/stop/", methods=["POST", "GET"])
 @login_required
 def stop_dataset_interactive(key):
     """
