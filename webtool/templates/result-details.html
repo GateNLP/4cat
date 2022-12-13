@@ -38,6 +38,12 @@
                                data-confirm-action="cancel this dataset? You can provide a reason that will be displayed to the user"><i
                                 class="fas fa-radiation" aria-hidden="true"></i> Cancel dataset</a></li>
                     {% endif %}
+                    {% if not dataset.is_finished() %}
+                           <li><a href="{{ url_for('stop_dataset_interactive', key=dataset.key) }}" class="prompt-first"
+                                  data-confirm-method="POST" data-confirm-var="reason"
+                                  data-confirm-action="stop this dataset"><i
+                                   class="fas fa-radiation" aria-hidden="true"></i> Stop dataset</a></li>
+                    {% endif %}
                 </ul>
             </nav>
 
@@ -130,6 +136,28 @@
             </div>
         </div>
     </section>
+
+    {% if dataset.is_continuous() %}
+        <section class="multi-file-results">
+            <h3 class="blocktitle section-subheader" collapsed aria-hidden="true" id="child-tree-header">
+                <span>Batch files</span>
+                <button id="expand-subfiles">Collapse all</button>
+            </h3>
+
+            <ol id="subfile-list" class="subfile-list">
+                <div class="fullwidth" id="subfile-result">
+                    {% set filepath = dataset.get_zip_path() %}
+                    {% include "result-zipfile-row.html" %}
+                </div>
+                {% for filepath in dataset.get_subfile_paths() %}
+                    <div  id="subfile-result">
+                        {% include "result-subfile-row.html" %}
+                    </div>
+                {% endfor %}
+            </ol>
+        </section>
+
+    {% endif %}
 
     <section class="analysis-gallery">
         <h3 class="blocktitle section-subheader{% if not dataset.children %} collapsed" aria-hidden="true{% endif %}" id="child-tree-header">

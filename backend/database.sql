@@ -51,7 +51,9 @@ CREATE TABLE IF NOT EXISTS datasets (
   is_private        boolean DEFAULT TRUE,
   software_version  text,
   software_file     text DEFAULT '',
-  annotation_fields text DEFAULT ''
+  annotation_fields text DEFAULT '',
+  is_continuous boolean DEFAULT FALSE,
+  num_files integer DEFAULT 1
 );
 
 -- annotations

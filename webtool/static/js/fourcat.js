@@ -40,6 +40,8 @@ const result_page = {
         // dataset 'collapse'/'expand' buttons in result view
         $(document).on('click', '#expand-datasets', result_page.toggleDatasets);
 
+        $(document).on('click', '#expand-subfiles', result_page.toggleSubfiles);
+
         //allow opening given analysis path via anchor links
         let navpath = window.location.hash.substr(1);
         if (navpath.substring(0, 4) === 'nav=') {
@@ -84,7 +86,28 @@ const result_page = {
                 controls.attr('aria-expanded', expanded_state);
             }
         });
-    }
+    },
+
+    /**
+	 * Toggle the visibility of subfiles
+	 *
+	 * @param e  Triggering event
+	 */
+    toggleSubfiles: function (e) {
+        let new_text;
+        let expanded_state;
+
+        if ($(this).text().toLowerCase().indexOf('expand') >= 0) {
+            new_text = 'Collapse all';
+            expanded_state = true;
+        } else {
+            new_text = 'Expand all';
+            expanded_state = false;
+        }
+
+        $(this).text(new_text);
+        document.getElementById('subfile-list').hidden = !expanded_state
+	}
 }
 
 /**
@@ -100,6 +123,9 @@ const processor = {
 
         // dataset deletion
         $(document).on('click', '.delete-link', processor.delete);
+
+        // dataset stop
+		$(document).on('click', '.stop-link', processor.stop);
     },
 
     /**
@@ -218,7 +244,30 @@ const processor = {
                 popup.alert('Could not delete dataset: ' + json.status, 'Error');
             }
         });
-    }
+    },
+
+    stop: function(e) {
+		e.preventDefault();
+
+		if(!confirm('Are you sure you would like to stop collecting?')) {
+			return;
+		}
+
+		$.ajax(getRelativeURL('api/stop-query/'), {
+			method: 'POST',
+			data: {key: $(this).attr('data-key')},
+			success: function(json) {
+				$('li#child-' + json.key).animate({height: 0}, 200, function() { $(this).remove(); });
+				if($('.child-list.top-level li').length === 0) {
+					$('#child-tree-header').attr('aria-hidden', 'true').addClass('collapsed');
+				}
+				query.enable_form();
+			},
+			error: function(json) {
+				popup.alert('Could not stop data collection: ' + json.status, 'Error');
+			}
+		});
+	}
 };
 
 /**
@@ -280,7 +329,8 @@ const query = {
      * Enable query form, so settings may be changed
      */
     enable_form: function () {
-        $('#query-status .delete-link').remove();
+		$('#query-status .stop-link').remove();
+		$('#query-status .delete-link').remove();
         $('#query-status .status_message .dots').html('');
         $('#query-status .message').html('Enter dataset parameters to begin.');
         $('#query-form fieldset').prop('disabled', false);
@@ -393,6 +443,12 @@ const query = {
                     query.check(query.query_key);
 
                     $('#query-status').append($('<button class="delete-link" data-key="' + query.query_key + '">Cancel</button>'));
+
+                    // only add the stop button for telegram sources for now
+					let source_telegram = datasource === 'telegram'
+					if (source_telegram) {
+						$('#query-status').append($('<button class="stop-link" data-key="' + query.query_key + '">Stop</button>'));
+					}
 
                     // poll results every 2000 ms after submitting
                     query.poll_interval = setInterval(function () {

@@ -195,25 +195,26 @@ class WorkerManager:
 			return
 
 		for worker in self.worker_pool[jobtype]:
-			if (job and worker.job.data["id"] == job.data["id"]) or (worker.job.data["jobtype"] == jobtype and worker.job.data["remote_id"] == remote_id):
-				# first cancel any interruptable queries for this job's worker
-				while True:
-					active_queries = self.queue.get_all_jobs("cancel-pg-query", remote_id=worker.db.appname, restrict_claimable=False)
-					if not active_queries:
-						# all cancellation jobs have been run
-						break
+			if interrupt_level is not worker.INTERRUPT_STOP:
+				if (job and worker.job.data["id"] == job.data["id"]) or (worker.job.data["jobtype"] == jobtype and worker.job.data["remote_id"] == remote_id):
+					# first cancel any interruptable queries for this job's worker
+					while True:
+						active_queries = self.queue.get_all_jobs("cancel-pg-query", remote_id=worker.db.appname, restrict_claimable=False)
+						if not active_queries:
+							# all cancellation jobs have been run
+							break
 
-					for cancel_job in active_queries:
-						if cancel_job.is_claimed:
-							continue
+						for cancel_job in active_queries:
+							if cancel_job.is_claimed:
+								continue
 
-						# this will make the job be run asap
-						cancel_job.claim()
-						cancel_job.release(delay=0, claim_after=0)
+							# this will make the job be run asap
+							cancel_job.claim()
+							cancel_job.release(delay=0, claim_after=0)
 
-					# give the cancel job a moment to run
-					time.sleep(0.25)
+						# give the cancel job a moment to run
+						time.sleep(0.25)
 
-				# now all queries are interrupted, formally request an abort
-				worker.request_interrupt(interrupt_level)
-				return
+			# now all queries are interrupted, formally request an abort
+			worker.request_interrupt(interrupt_level)
+			return

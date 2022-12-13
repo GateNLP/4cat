@@ -84,6 +84,8 @@ class Search(BasicProcessor, ABC):
 				raise NotImplementedError("Datasource query cannot be saved as %s file" % results_file.suffix)
 
 			self.dataset.update_status("Query finished, results are available.")
+		elif self.dataset.is_continuous() and items is not None:
+			self.dataset.update_status("Query finished. Results should already be logged to file.")
 		elif items is not None:
 			self.dataset.update_status("Query finished, no results found.")
 
@@ -221,7 +223,8 @@ class Search(BasicProcessor, ABC):
 			# Parsing: remove the HTML tags, but keep the <br> as a newline
 			# Takes around 1.5 times longer
 			for row in results:
-				if self.interrupted:
+				# it has been interrupted, but intentionally, and so we'd like to finish the job
+				if self.interrupted and self.interrupted != self.INTERRUPT_STOP:
 					raise ProcessorInterruptedException("Interrupted while writing results to file")
 
 				if not header_written:

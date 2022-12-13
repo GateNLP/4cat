@@ -8,6 +8,11 @@ article.result > section:first-child {
     border-top: 1px solid var(--gray);
 }
 
+.multi-file-results h3 {
+    border-top: 0.5em solid var(--accent);
+    margin-top: 1em;
+}
+
 .analysis-gallery h3 {
     border-top: 0.5em solid var(--accent);
     margin-top: 1em;
@@ -40,13 +45,46 @@ article.result > section:first-child {
     padding-bottom: 0.5em;
 }
 
-
 /** result card **/
 .card-content {
     display: grid;
     grid-auto-rows: auto;
     align-content: start;
     align-items: start;
+}
+
+#subfile-result .result-actions {
+    text-align: center;
+    padding: 0;
+}
+
+#subfile-result ul{
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: stretch;
+}
+
+#subfile-result li {
+    padding: 0.5em;
+    margin: 0;
+    background: var(--always-white);
+    border: 1px solid var(--gray);
+    width: 100%;
+}
+
+#subfile-result a {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    column-gap: 0.5em
+}
+
+#subfile-result a.popup-trigger {
+    cursor: zoom-in;
 }
 
 #dataset-result dd {
@@ -97,6 +135,19 @@ article.result > section:first-child {
 #dataset-result a.popup-trigger {
     cursor: zoom-in;
 }
+
+#display-status {
+    display: flex;
+}
+
+#display-status a {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
 .query.card div.notice {
     color: var(--accent-alternate);
     background: var(--contrast-bright);

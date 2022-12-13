@@ -16,7 +16,7 @@ from flask_login import login_required, current_user
 from webtool import app, db, log
 from webtool.lib.helpers import Pagination, error
 from webtool.views.api_tool import delete_dataset, toggle_favourite, toggle_private, queue_processor, nuke_dataset, \
-    erase_credentials
+    erase_credentials, stop_dataset
 
 import common.config_manager as config
 import backend
@@ -97,7 +97,7 @@ def show_results(page):
     # empty datasets could just have no results, or be failures. we make no
     # distinction here
     if filters["hide_empty"]:
-        where.append("num_rows > 0")
+        where.append("num_rows > 0 OR (is_continuous = TRUE AND is_finished = FALSE)")
 
     # the user filter is only exposed to admins, and otherwise emulates the
     # 'own' option
@@ -164,8 +164,19 @@ def get_result(query_file):
     return send_from_directory(directory=directory, path=query_file)
 
 
+@app.route('/mapped-result/<string:key>/<string:file>')
+def get_mapped_subfile_result(key, file):
+    """
+    Runs get_mapped_result, but allows you to specify file from dataset
+
+    :param str key:  Dataset key
+    :param str subfile: the file from the dataset you would like to process
+    """
+    return get_mapped_result(key, subfile=file)
+
+
 @app.route('/mapped-result/<string:key>/')
-def get_mapped_result(key):
+def get_mapped_result(key, subfile=None):
     """
     Get mapped result
 
@@ -175,18 +186,24 @@ def get_mapped_result(key):
     route uses that to convert the data to CSV on the fly and serve it as such.
 
     :param str key:  Dataset key
+    :param str subfile: (optional) the subfile from the dataset you would like to process if not the default
     """
     try:
         dataset = DataSet(key=key, db=db)
     except TypeError:
         return error(404, error="Dataset not found.")
 
+    if subfile:
+        file = dataset.get_results_dir().joinpath(subfile)
+    else:
+        file = dataset.get_results_path()
+
     if dataset.is_private and not (current_user.is_admin or dataset.owner == current_user.get_id()):
         return error(403, error="This dataset is private.")
 
     if dataset.get_extension() == ".csv":
         # if it's already a csv, just return the existing file
-        return url_for(get_result, query_file=dataset.get_results_path().name)
+        return url_for(get_result, query_file=file)
 
     if not hasattr(dataset.get_own_processor(), "map_item"):
         # cannot map without a mapping method
@@ -204,7 +221,7 @@ def get_mapped_result(key):
         """
         writer = None
         buffer = io.StringIO()
-        with dataset.get_results_path().open() as infile:
+        with file.open() as infile:
             for line in infile:
                 mapped_item = mapper(json.loads(line))
                 if not writer:
@@ -219,7 +236,7 @@ def get_mapped_result(key):
                 buffer.truncate(0)
                 buffer.seek(0)
 
-    disposition = 'attachment; filename="%s"' % dataset.get_results_path().with_suffix(".csv").name
+    disposition = 'attachment; filename="%s"' % file.with_suffix(".csv").name
     return app.response_class(stream_with_context(map_response()), mimetype="text/csv",
                               headers={"Content-Disposition": disposition})
 
@@ -245,8 +262,21 @@ def view_log(key):
     return log
 
 
+@app.route("/preview-subfile/<string:key>/<string:file>")
+def preview_subfile(key, file):
+    """
+       Preview a specific CSV file. Runs preview_items, but with specified file.
+
+       :param str key:  Dataset key
+       :param str file:  file to be previewed
+
+       :return:  HTML preview
+       """
+    return preview_items(key, subfile=file)
+
+
 @app.route("/preview/<string:key>/")
-def preview_items(key):
+def preview_items(key, subfile=None):
     """
     Preview a CSV file
 
@@ -254,6 +284,7 @@ def preview_items(key):
     template renderer.
 
     :param str key:  Dataset key
+    :param subfile: (optional) subfile from the dataset you'd like to preview if not default file
     :return:  HTML preview
     """
     try:
@@ -279,8 +310,9 @@ def preview_items(key):
 
     else:
         rows = []
+        subfile = dataset.get_results_dir().joinpath(subfile) if subfile else None
         try:
-            for row in dataset.iterate_items():
+            for row in dataset.iterate_items(subfile=subfile):
                 if len(rows) > preview_size:
                     break
 
@@ -533,6 +565,35 @@ def nuke_dataset_interactive(key):
     reason = request.form.get("reason", "")
 
     success = nuke_dataset(key, reason)
+
+    if not success.is_json:
+        return success
+    else:
+        # If it's a child processor, refresh the page.
+        # Else go to the results overview page.
+        return redirect(url_for('show_result', key=top_key))
+
+
+@app.route("/results/<string:key>/stop/", methods=["POST"])
+@login_required
+def stop_dataset_interactive(key):
+    """
+    Stop dataset
+
+    :param str key:  Dataset key
+    :return:
+    """
+    try:
+        dataset = DataSet(key=key, db=db)
+    except TypeError:
+        return error(404, message="Dataset not found.")
+
+    if not current_user.can_access_dataset(dataset):
+        return error(403, error="This dataset is private.")
+
+    top_key = dataset.top_parent().key
+
+    success = stop_dataset(key)
 
     if not success.is_json:
         return success

@@ -40,6 +40,10 @@ class BasicWorker(threading.Thread, metaclass=abc.ABCMeta):
 	#: should be cancelled
 	INTERRUPT_CANCEL = 2
 
+	#: Flag value to indicate worker interruption type - interrupted, but
+	#: existing collected data should be retained
+	INTERRUPT_STOP = 3
+
 	#: Job queue that can be used to create or manipulate jobs
 	queue = None
 
