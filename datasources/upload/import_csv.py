@@ -97,16 +97,24 @@ class SearchCustom(BasicProcessor):
                 if isinstance(item, import_formats.InvalidImportedItem):
                     # if the mapper returns this class, the item is not written
                     skipped += 1
+                    if hasattr(item, "reason"):
+                        self.dataset.log(f"Skipping item ({item.reason})")
                     continue
 
                 if not writer:
                     writer = csv.DictWriter(output_csv, fieldnames=list(item.keys()))
+                    header = list(item.keys())
                     writer.writeheader()
 
                 if self.parameters.get("strip_html") and "body" in item:
                     item["body"] = strip_tags(item["body"])
 
-                writer.writerow(item)
+                try:
+                    writer.writerow(item)
+                except ValueError as e:
+                    return self.dataset.finish_with_error("Could not parse CSV file. Have you selected the correct "
+                                                          "format?")
+                
                 done += 1
 
         # done!

@@ -40,39 +40,14 @@ class SearchTikTok(Search):
         """
         raise NotImplementedError("TikTok datasets can only be created by importing data from elsewhere")
 
-    def import_from_file(self, path):
-        """
-        Import items from an external file
-
-        By default, this reads a file and parses each line as JSON, returning
-        the parsed object as an item. This works for NDJSON files. Data sources
-        that require importing from other or multiple file types can overwrite
-        this method.
-
-        The file is considered disposable and deleted after importing.
-
-        :param str path:  Path to read from
-        :return:  Yields all items in the file, item for item.
-        """
-        path = Path(path)
-        if not path.exists():
-            return []
-
-        with path.open() as infile:
-            for line in infile:
-                if self.interrupted:
-                    raise WorkerInterruptedException()
-
-                # remove NUL bytes here because they trip up a lot of other
-                # things
-                yield json.loads(line.replace("\0", ""))["data"]
-
-        path.unlink()
-
     @staticmethod
     def map_item(post):
+        challenges = [challenge["title"] for challenge in post.get("challenges", [])]
+
         hashtags = [extra["hashtagName"] for extra in post.get("textExtra", []) if
                     "hashtagName" in extra and extra["hashtagName"]]
+
+        labels = ",".join(post["diversificationLabels"]) if type(post.get("diversificationLabels")) is list else ""
 
         if type(post.get("author")) is dict:
             # from intercepted API response
@@ -108,23 +83,31 @@ class SearchTikTok(Search):
             "thread_id": post["id"],
             "author": user_nickname,
             "author_full": user_fullname,
-            "author_id": user_id,
             "author_followers": post.get("authorStats", {}).get("followerCount", ""),
+            "author_likes": post.get("authorStats", {}).get("diggCount", ""),
+            "author_videos": post.get("authorStats", {}).get("videoCount", ""),
+            "author_avatar": post.get("avatarThumb", ""),
             "body": post["desc"],
             "timestamp": datetime.utcfromtimestamp(int(post["createTime"])).strftime('%Y-%m-%d %H:%M:%S'),
             "unix_timestamp": int(post["createTime"]),
-            "is_duet": post["duetInfo"].get("duetFromId") != "0",
+            "is_duet": "yes" if (post.get("duetInfo", {}).get("duetFromId") != "0" if post.get("duetInfo", {}) else False) else "no",
+            "is_ad": "yes" if post.get("isAd", False) else "no",
             "music_name": post["music"]["title"],
             "music_id": post["music"]["id"],
             "music_url": post["music"]["playUrl"],
+            "music_thumbnail": post["music"].get("coverLarge", ""),
+            "music_author": post["music"].get("authorName", ""),
             "video_url": post["video"].get("downloadAddr", ""),
-            "tiktok_url": "https://tiktok.com/@%s/video/%s" % (user_nickname, post["id"]),
+            "tiktok_url": "https://www.tiktok.com/@%s/video/%s" % (user_nickname, post["id"]),
             "thumbnail_url": thumbnail_url,
             "likes": post["stats"]["diggCount"],
             "comments": post["stats"]["commentCount"],
             "shares": post["stats"]["shareCount"],
             "plays": post["stats"]["playCount"],
             "hashtags": ",".join(hashtags),
+            "challenges": ",".join(challenges),
+            "diversification_labels": labels,
+            "location_created": post.get("locationCreated", ""),
             "stickers": "\n".join(" ".join(s["stickerText"]) for s in post.get("stickersOnItem", [])),
             "effects": ",".join([e["name"] for e in post.get("effectStickers", [])]),
             "warning": ",".join([w["text"] for w in post.get("warnInfo", [])])
