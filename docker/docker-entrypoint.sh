@@ -30,13 +30,13 @@ done
 echo "PostgreSQL started"
 
 # Create Database if it does not already exist
-if [ `psql --host=db --port=5432 --user=$POSTGRES_USER --dbname=$POSTGRES_DB -tAc "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'jobs')"` = 't' ]; then
+if [ `psql --host=$DB_HOST --port=$DB_PORT --user=$POSTGRES_USER --dbname=$POSTGRES_DB -tAc "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'jobs')"` = 't' ]; then
   # Table already exists
   echo "Database already created"
 else
   echo "Creating Database"
   # Seed DB
-  cd /usr/src/app && psql --host=db --port=5432 --user=$POSTGRES_USER --dbname=$POSTGRES_DB < backend/database.sql
+  cd /usr/src/app && psql --host=$DB_HOST --port=$DB_PORT --user=$POSTGRES_USER --dbname=$POSTGRES_DB < backend/database.sql
   # No database exists, new build, no need to migrate so create .current-version file
   cp VERSION config/.current-version
 fi
