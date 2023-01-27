@@ -96,6 +96,9 @@ if __name__ == "__main__":
         your_server =  os.environ['SERVER_NAME']
         if int(public_port) == 80:
             config.set_or_create_setting('flask.server_name', your_server, raw=False)
+        elif int(public_port) == 443:
+            config.set_or_create_setting('flask.server_name', your_server, raw=False)
+            config.set_or_create_setting('flask.https', "true", raw=False)
         else:
             config.set_or_create_setting('flask.server_name', f"{your_server}:{public_port}", raw=False)
 
@@ -132,6 +135,9 @@ if __name__ == "__main__":
         your_server = os.environ['SERVER_NAME']
         if int(public_port) == 80:
           config.set_or_create_setting('flask.server_name', your_server, raw=False)
+        elif int(public_port) == 443:
+            config.set_or_create_setting('flask.server_name', your_server, raw=False)
+            config.set_or_create_setting('flask.https', "true", raw=False)
         else:
           config.set_or_create_setting('flask.server_name', f"{your_server}:{public_port}", raw=False)
 
