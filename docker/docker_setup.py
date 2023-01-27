@@ -32,13 +32,19 @@ if __name__ == "__main__":
         config_parser.add_section('DOCKER')
         config_parser['DOCKER']['use_docker_config'] = 'True'
 
+
         config_parser.add_section('DATABASE')
-        config_parser['DATABASE']['db_host'] = 'db' # database service name in docker-compose.py
-        config_parser['DATABASE']['db_port'] = '5432' # port exposed by postgres image
+        # config_parser['DATABASE']['db_host'] = 'db' # database service name in docker-compose.py
+        # config_parser['DATABASE']['db_port'] = '5432' # port exposed by postgres image
+        config_parser['DATABASE']['db_host'] = os.environ['DB_HOST'] # database service name in docker-compose.py
+        config_parser['DATABASE']['db_port'] = os.environ['DB_PORT']  # port exposed by postgres image
 
         config_parser.add_section('API')
-        config_parser['API']['api_host'] = '4cat_backend' # backend container_name in docker-compose.py
-        config_parser['API']['api_port'] = '4444' # backend port exposed in docker-compose.py
+        # name of this backend container
+        # config_parser['API']['api_host'] = '4cat_backend' # backend container_name in docker-compose.py
+        # config_parser['API']['api_port'] = '4444' # backend port exposed in docker-compose.py
+        config_parser['API']['api_host'] = os.environ['PUBLIC_API_HOST']# backend container_name in docker-compose.py
+        config_parser['API']['api_port'] = os.environ['PUBLIC_API_PORT']
 
         # File paths
         config_parser.add_section('PATHS')
