@@ -41,12 +41,17 @@ class ConfigManager:
     API_HOST = config_reader["API"].get("api_host")
     API_PORT = config_reader["API"].getint("api_port")
 
+    GOOGLE_CLIENT_ID = config_reader["GOOGLE"].get("client_id")
+    GOOGLE_CLIENT_SECRET = config_reader["GOOGLE"].get("client_secret")
+    GOOGLE_CLIENT_AUTH_URI = config_reader["GOOGLE"].get("auth_redirect_uri")
+
     PATH_ROOT = str(Path(os.path.abspath(os.path.dirname(__file__))).joinpath(".."))  # better don"t change this
     PATH_LOGS = config_reader["PATHS"].get("path_logs", "")
     PATH_IMAGES = config_reader["PATHS"].get("path_images", "")
     PATH_DATA = config_reader["PATHS"].get("path_data", "")
     PATH_LOCKFILE = config_reader["PATHS"].get("path_lockfile", "")
     PATH_SESSIONS = config_reader["PATHS"].get("path_sessions", "")
+    PATH_GDRIVE_ROOT = config_reader["PATHS"].get("path_gdrive_root", "")
 
     ANONYMISATION_SALT = config_reader["GENERATE"].get("anonymisation_salt")
     SECRET_KEY = config_reader["GENERATE"].get("secret_key")

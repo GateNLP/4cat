@@ -342,6 +342,16 @@ class User:
 
         self.db.update("users", where={"name": self.get_id()}, data={"userdata": json.dumps(self.userdata)})
 
+    def remove_value(self, key):
+        """
+        Unset persistently(....) stored user property
+
+        :param key:  Name of item to remove
+        """
+
+        self.userdata.pop(key, None)
+        self.db.update("users", where={"name": self.get_id()}, data={"userdata": json.dumps(self.userdata)})
+
     def set_password(self, password):
         """
         Set user password
@@ -404,3 +414,14 @@ class User:
             "AND (u.name = n.username OR (u.is_admin AND n.username = '!admins') OR n.username = '!everyone')", (self.get_id(),))
 
         return notifications
+
+    #todo: maybe not the best determiner...
+    def is_logged_into_drive(self):
+        """
+        Get google drive access and refresh tokens to determine if a user has logged into google drive via 4cat
+
+        These should only be present if a user has authenticated with google drive
+
+        return boolean: whethe ror not the user is logged into google drive
+        """
+        return self.get_value("gdrive.accesstoken") and self.get_value("gdrive.refreshtoken")

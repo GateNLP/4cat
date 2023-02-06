@@ -8,6 +8,9 @@ import time
 import csv
 import re
 
+import google
+import google.oauth2.credentials
+from googleapiclient.discovery import build
 from pathlib import Path
 
 import common.config_manager as config
@@ -118,7 +121,8 @@ class DataSet(FourcatModule):
 				"progress": 0.0,
 				"key_parent": parent,
 				"is_continuous": False,
-				"num_files": 0
+				"num_files": 0,
+				"drive_dir_id": ""
 			}
 			self.parameters = parameters
 
@@ -182,6 +186,14 @@ class DataSet(FourcatModule):
 		:return Path:  A path to the log file
 		"""
 		return self.get_results_path().with_suffix(".log")
+
+	def get_owner(self):
+		"""
+		Get username of dataset owner
+
+		:return Path:  A string listing the owner of this dataset
+		"""
+		return self.data["owner"]
 
 	def clear_log(self):
 		"""
@@ -1300,6 +1312,63 @@ class DataSet(FourcatModule):
 		"""
 
 		self.iterate_items(self, processor, bypass_map_item, subfile)
+
+	def get_drive_dir_id(self):
+		"""
+		Retrieves the google drive directory id for this dataset, or creates one if it does not exist
+
+		:return drive_dir_id:  Directory id for this dataset in google drive
+		"""
+
+		drive_dir_id = self.data["drive_dir_id"]
+
+		if not drive_dir_id:
+			# get the owner fourcat folder. this should exist from initial login to google
+			user_data = self.db.fetchone("SELECT userdata FROM users WHERE name = \'%s\';" % self.get_owner())
+			user_data = json.loads(user_data["userdata"])
+			credentials = google.oauth2.credentials.Credentials(user_data["gdrive.accesstoken"])
+			gdrive_client = build('drive', 'v3', credentials=credentials)
+
+			# specify the details for the folder you would like to create
+			file_metadata = {
+				'name': self.data["result_file"].split(".")[0],
+				'parents': [user_data["gdrive.folderId"]],
+				'mimeType': 'application/vnd.google-apps.folder'
+			}
+
+			# create the folder
+			new_root_dir = gdrive_client.files().create(body=file_metadata, fields='id').execute()
+
+			# store the id in all the relevant places
+			drive_dir_id = new_root_dir["id"]
+			self.data["drive_dir_id"] = drive_dir_id
+			self.db.update("datasets", where={"key": self.data["key"]}, data={"drive_dir_id": drive_dir_id})
+
+		return drive_dir_id
+
+	def get_owner_drive_credentials(self):
+		"""
+		Retrieves the oauth2 google credential details for the owner of this dataset
+
+		:return credentials: dataset owner oauth2 credential object
+		"""
+		user_data = self.db.fetchone("SELECT userdata FROM users WHERE name = \'%s\';" % self.get_owner())
+		user_data = json.loads(user_data["userdata"])
+
+		try:
+			credentials = google.oauth2.credentials.Credentials(
+				user_data["gdrive.accesstoken"],
+				refresh_token=user_data["gdrive.refreshtoken"],
+				client_id=config.get("GOOGLE_CLIENT_ID"),
+				client_secret=config.get("GOOGLE_CLIENT_SECRET"),
+				token_uri="https://www.googleapis.com/oauth2/v4/token"
+			)
+
+			return credentials
+
+		except KeyError:
+			self.update_status("Cannot find details to access google drive.")
+			return None
 
 	def __getattr__(self, attr):
 		"""

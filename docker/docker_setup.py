@@ -53,6 +53,7 @@ if __name__ == "__main__":
         config_parser['PATHS']['path_lockfile'] = 'backend' # docker-entrypoint.sh looks for pid file here (in event Docker shutdown was not clean)
         config_parser['PATHS']['path_sessions'] = 'config/sessions'  # shared volume defined in docker-compose.yml
         config_parser['PATHS']['path_logs'] = 'logs/' # shared volume defined in docker-compose.yml
+        config_parser['PATHS']['path_gdrive_root'] = 'fourcat-auto' # root folder if saving to gdrive
 
         # Generated variables
         config_parser.add_section('GENERATE')
@@ -73,6 +74,12 @@ if __name__ == "__main__":
         config_parser.add_section('SERVER')
         public_port = os.environ['PUBLIC_PORT']
         config_parser['SERVER']['public_port'] = public_port
+
+        # Google OAuth setup
+        config_parser.add_section('GOOGLE')
+        config_parser['GOOGLE']['client_id'] = os.environ['FN_CLIENT_ID']
+        config_parser['GOOGLE']['client_secret'] = os.environ['FN_CLIENT_SECRET']
+        config_parser['GOOGLE']['auth_redirect_uri'] = os.environ['FN_AUTH_REDIRECT_URI']
 
         # Save config file
         with open(CONFIG_FILE, 'w') as configfile:
@@ -126,6 +133,10 @@ if __name__ == "__main__":
 
         public_port = os.environ['PUBLIC_PORT']
         config_parser['SERVER']['public_port'] = str(public_port)
+
+        config_parser['GOOGLE']['client_id'] = os.environ['FN_CLIENT_ID']
+        config_parser['GOOGLE']['client_secret'] = os.environ['FN_CLIENT_SECRET']
+        config_parser['GOOGLE']['auth_redirect_uri'] = os.environ['FN_AUTH_REDIRECT_URI']
 
         # Save config file
         with open(CONFIG_FILE, 'w') as configfile:

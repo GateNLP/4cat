@@ -12,6 +12,8 @@ import time
 import re
 
 from pathlib import Path
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 from zipfile import ZipFile
 
 from backend.abstract.search import Search
@@ -127,6 +129,17 @@ class SearchTelegram(Search):
             "type": UserInput.OPTION_TOGGLE,
             "help": "Save session:",
             "default": False
+        },
+        "info-google-drive": {
+            "type": UserInput.OPTION_INFO,
+            "help": "This option allows you to save the results of this search to your own google drive in a folder "
+                    "named fourcat-auto/. In order to use this option, you *must* ensure you have logged into google"
+                    "drive using the \"Login to Google Drive\" option in the header above."
+        },
+        "save-to-gdrive": {
+            "type": UserInput.OPTION_TOGGLE,
+            "help": "Save to google drive:",
+            "default": True
         },
         "resolve-entities-intro": {
             "type": UserInput.OPTION_INFO,
@@ -251,6 +264,16 @@ class SearchTelegram(Search):
         queries = [query.strip() for query in parameters.get("query", "").split(",")]
         max_items = convert_to_int(parameters.get("items", 10), 10)
         continue_collection = parameters.get("continue-collection")
+        save_to_gdrive = parameters.get("save-to-gdrive")
+        drive_client = None
+
+        # set up google drive client if we're going to need it
+        if save_to_gdrive:
+            try:
+                credentials = self.dataset.get_owner_drive_credentials()
+                drive_client = build('drive', 'v3', credentials=credentials)
+            except KeyError:
+                self.dataset.update_status("Could not validate with google. Nothing will be uploaded to google drive.")
 
         # Telethon requires the offset date to be a datetime date
         max_date = parameters.get("max_date")
@@ -274,7 +297,7 @@ class SearchTelegram(Search):
                 posts.append(post)
             if continue_collection:
                 self.dataset.mark_continuous()
-                cont_posts = await self.continuous_collection(client, queries, max_date, max_items)
+                cont_posts = await self.continuous_collection(client, queries, max_date, max_items, drive_client)
                 posts = posts + cont_posts
             return posts
         except ProcessorInterruptedException as e:
@@ -880,6 +903,7 @@ class SearchTelegram(Search):
             "api_hash": query.get("api_hash"),
             "api_phone": query.get("api_phone"),
             "save-session": query.get("save-session"),
+            "save-to-gdrive": query.get("save-to-gdrive"),
             "continue-collection": query.get("continue-collection"),
             "resolve-entities": query.get("resolve-entities"),
             "include-actions": query.get("include-actions"),
@@ -968,7 +992,7 @@ class SearchTelegram(Search):
 
         self.dataset.update_status("Message retrieved. Continuing to listen for new messages...")
 
-    async def continuous_collection(self, client, queries, max_date, max_items):
+    async def continuous_collection(self, client, queries, max_date, max_items, gdrive_client):
         """
         Continuously gather messages for each entity for which messages are requested
 
@@ -1015,7 +1039,7 @@ class SearchTelegram(Search):
                 await asyncio.sleep(0.5)
 
                 if len(continuous_posts) >= max_items:
-                    await self.save_files(continuous_posts)
+                    await self.save_files(continuous_posts, gdrive_client)
                     final_file_posts = final_file_posts + continuous_posts
                     continuous_posts.clear()
 
@@ -1023,7 +1047,7 @@ class SearchTelegram(Search):
 
                     if len(continuous_posts):
                         self.dataset.update_status("Saving latest messages before stopping collection")
-                        await self.save_files(continuous_posts)
+                        await self.save_files(continuous_posts, gdrive_client)
                         final_file_posts = final_file_posts + continuous_posts
 
 
@@ -1064,7 +1088,7 @@ class SearchTelegram(Search):
 
         return final_file_posts
 
-    async def save_files(self, items):
+    async def save_files(self, items, gdrive_client):
         """
         Save subfile to dataset
 
@@ -1084,8 +1108,13 @@ class SearchTelegram(Search):
             self.dataset.update_status("Writing currently collected data to dataset file")
             if results_file.suffix == ".ndjson":
                 self.items_to_ndjson(items, subfile_path)
+                if gdrive_client:
+                    await self.save_to_google_drive(gdrive_client, subfile_path, "application/x-ndjson")
+
             elif results_file.suffix == ".csv":
                 self.items_to_csv(items, subfile_path)
+                if gdrive_client:
+                    await self.save_to_google_drive(gdrive_client, subfile_path, "text/csv")
             else:
                 raise NotImplementedError("Datasource query cannot be saved as %s file" % results_file.suffix)
 
@@ -1104,3 +1133,35 @@ class SearchTelegram(Search):
             zip_obj.write(i)
 
         zip_obj.close()
+
+    async def save_to_google_drive(self, gdrive_client, file_path, mime_type):
+        """
+       Save given file to google drive
+
+       :params gdrive_client: client to interact with google drive
+       :params file_path: path of file to upload
+       :params mime_type: mime type of file to upload
+       """
+
+        self.dataset.update_status("Attempting to write subfile to google drive")
+
+        try:
+            drive_dir_id = self.dataset.get_drive_dir_id()
+            path = str(file_path)
+
+            filename = path.split("/")[-1]
+
+            body = {'name': filename, 'mimeType': mime_type, 'parents': [drive_dir_id]}
+            file_data = open(path, 'rb')
+
+            media_body = MediaIoBaseUpload(file_data, mimetype=mime_type, resumable=True)
+
+            gdrive_client.files().create(body=body, media_body=media_body,
+                                         fields='id,name,mimeType,createdTime,modifiedTime').execute()
+
+            self.dataset.update_status("Finished writing subfile to google drive")
+
+        except Exception as e:
+            self.dataset.update_status("Failed to write file %s to google drive" % str(file_path.name))
+            self.dataset.update_status("Error is %s" % str(e))
+            return

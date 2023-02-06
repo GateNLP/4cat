@@ -41,6 +41,11 @@
             {% endif %}
             <li><a href="{{ url_for('show_page', page='faq') }}"><abbr title="Frequently Asked Questions">FAQ</abbr></a></li>
 			<li><a href="{{ url_for('show_frontpage') }}">About</a></li>
+            {% if current_user.is_authenticated and current_user.is_logged_into_drive() %}
+                <li><a href="{{ url_for('logout_google') }}">Log out of Google Drive</a></li>
+            {% elif current_user.is_authenticated  %}
+                <li><a href="{{ url_for('login_google') }}">Log into Google Drive</a></li>
+            {% endif %}
 		</ul>
     {% for notification in __notifications %}
         <div class="site-announcement">

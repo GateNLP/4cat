@@ -15,6 +15,7 @@ from flask_login import login_required, current_user
 
 from webtool import app, db, log
 from webtool.lib.helpers import Pagination, error
+from webtool.views import google_auth
 from webtool.views.api_tool import delete_dataset, toggle_favourite, toggle_private, queue_processor, nuke_dataset, \
     erase_credentials, stop_dataset
 
@@ -388,6 +389,7 @@ def show_result(key):
     # if the dataset has parameters with credentials, give user the option to
     # erase them
     has_credentials = [p for p in dataset.parameters if p.startswith("api_") and p not in ("api_type", "api_track")]
+    logged_into_gdrive = True if 'auth_token' in flask.session else False
 
     # we can either show this view as a separate page or as a bunch of html
     # to be retrieved via XHR
@@ -397,7 +399,8 @@ def show_result(key):
     return render_template(template, dataset=dataset, parent_key=dataset.key, processors=backend.all_modules.processors,
                            is_processor_running=is_processor_running, messages=get_flashed_messages(),
                            is_favourite=is_favourite, timestamp_expires=timestamp_expires, has_credentials=has_credentials,
-                           expires_by_datasource=expires_datasource, can_unexpire=can_unexpire, datasources=datasources)
+                           expires_by_datasource=expires_datasource, can_unexpire=can_unexpire, datasources=datasources,
+                           logged_into_gdrive=logged_into_gdrive)
 
 
 @app.route('/results/<string:key>/processors/queue/<string:processor>/', methods=["GET", "POST"])

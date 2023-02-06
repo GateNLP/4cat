@@ -98,6 +98,7 @@ import webtool.views.views_processors
 import webtool.views.api_explorer
 import webtool.views.api_standalone
 import webtool.views.api_tool
+import webtool.views.google_auth
 
 # import custom jinja2 template filters
 import webtool.lib.template_filters

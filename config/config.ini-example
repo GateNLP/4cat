@@ -33,6 +33,8 @@ path_lockfile = backend
 path_sessions = sessions
 # Losts: store logs here - empty means the 4CAT root folder
 path_logs = logs/
+# Gdrive: any files stored on user google drive are initially put in this folder
+path_gdrive_root = fourcat-auto
 
 [GENERATE]
 # 4CAT can anonymise author names in results and does so using a hashed version
@@ -46,3 +48,8 @@ secret_key = REPLACE_THIS
 # Public/external facing ports
 [SERVER]
 public_port = 80
+
+[GOOGLE]
+client_key  = xxx
+client_secret = xxx
+auth_redirect_uri = http://localhost/api/drive/auth/oauthcallback

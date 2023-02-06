@@ -5,9 +5,13 @@ import asyncio
 import hashlib
 import json
 
-from pathlib import Path
+import googleapiclient
 
+from pathlib import Path
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 from telethon import TelegramClient
+from zipfile import ZipFile
 
 import common.config_manager as config
 from backend.abstract.processor import BasicProcessor
@@ -72,6 +76,11 @@ class TelegramImageDownloader(BasicProcessor):
                 "type": UserInput.OPTION_TOGGLE,
                 "help": "Include videos (as thumbnails)",
                 "default": False
+            },
+            "upload-to-drive": {
+                "type": UserInput.OPTION_TOGGLE,
+                "help": "Upload to drive (ensure you are logged into drive via option above)",
+                "default": True
             }
         }
 
@@ -126,12 +135,22 @@ class TelegramImageDownloader(BasicProcessor):
         session_path = Path(config.get('PATH_ROOT')).joinpath(config.get('PATH_SESSIONS'), session_id + ".session")
         amount = self.parameters.get("amount")
         with_thumbnails = self.parameters.get("video-thumbnails")
+        upload_to_drive = self.parameters.get("upload-to-drive")
         client = None
+        drive_client = None
 
         # we need a session file, otherwise we can't retrieve the necessary data
         if not session_path.exists():
             self.dataset.update_status("Telegram session file missing. Cannot download images.", is_final=True)
             return []
+
+        if upload_to_drive:
+            try:
+                credentials = self.dataset.get_owner_drive_credentials()
+                drive_client = build('drive', 'v3', credentials=credentials).files()
+            except Exception:
+                upload_to_drive = False
+                self.dataset.update_status("Could not validate with google. Nothing will be uploaded to google drive.")
 
         # instantiate client
         try:
@@ -170,6 +189,8 @@ class TelegramImageDownloader(BasicProcessor):
         # now actually download the images
         # todo: investigate if we can directly instantiate a MessageMediaPhoto instead of fetching messages
         media_done = 1
+        zip_file_count = 1
+
         for entity, message_ids in messages_with_photos.items():
             try:
                 async for message in client.iter_messages(entity=entity, ids=message_ids):
@@ -178,6 +199,10 @@ class TelegramImageDownloader(BasicProcessor):
 
                     success = False
                     try:
+                        if upload_to_drive and (media_done - 1) and (media_done - 1) % 10 == 0:
+                            self.save_to_gdrive(drive_client, zip_file_count)
+                            zip_file_count += 1
+
                         # it's actually unclear if images are always jpegs, but this
                         # seems to work
                         self.dataset.update_status("Downloading media %i/%i" % (media_done, total_media))
@@ -210,6 +235,9 @@ class TelegramImageDownloader(BasicProcessor):
                 self.dataset.log("Couldn't retrieve images for %s, it probably does not exist anymore (%s)" % (entity, str(e)))
                 self.flawless = False
 
+        if upload_to_drive:
+            self.save_to_gdrive(drive_client, zip_file_count)
+
     @staticmethod
     def cancel_start():
         """
@@ -222,3 +250,56 @@ class TelegramImageDownloader(BasicProcessor):
         told they need to re-authenticate via 4CAT.
         """
         raise RuntimeError("Connection cancelled")
+
+    def create_zip_file(self, zip_filename):
+        """
+		Create zip file with all images from current images staging area
+
+		:param zip_file_count: num of zip files already created + 1, used for file name
+		"""
+        downloaded_image_files = self.staging_area.glob("*")
+
+        zip_obj = ZipFile(zip_filename, 'w')
+
+        for img_file in downloaded_image_files:
+            zip_obj.write(img_file, img_file.name)
+
+        zip_obj.close()
+
+    def save_to_gdrive(self, drive_client, zip_file_count):
+        """
+		Create zip file with all images from current images staging area
+
+		:param drive_client: google drive client object
+		:param zip_file_count: num of zip files already created + 1, used for file name
+		"""
+
+        self.dataset.update_status("Saving collected images to google drive")
+
+        try:
+            zip_postfix = str(self.dataset.get_parent().get_results_path().stem)
+            zip_filename = "images-" + str(zip_file_count) + "-" + zip_postfix + ".zip"
+            self.create_zip_file(zip_filename);
+            zip_to_upload = open(zip_filename, 'rb')
+
+            # get the directory in which we want to upload this zip
+            parent_dir = self.dataset.get_parent().get_drive_dir_id()
+
+            # package up and upload folder
+            body = {'name': zip_to_upload.name, 'mimeType': "application/zip", 'parents': [parent_dir]}
+            media_body = MediaIoBaseUpload(zip_to_upload, mimetype="application/zip", resumable=True)
+
+            drive_client.create(body=body, media_body=media_body,
+                                fields='id,name,mimeType,createdTime,modifiedTime').execute()
+
+            # delete all the images in the staging area
+            # only do once files are actually uploaded, in case of error!
+            downloaded_image_files = self.staging_area.glob("*")
+            for img_file in downloaded_image_files:
+                img_file.unlink()
+
+            self.dataset.update_status("Finished saving collected images to drive")
+
+        except Exception as e:
+            self.dataset.update_status("Failed to write zip file %i to google drive" % zip_file_count)
+            self.dataset.update_status("Error is %s" % str(e))
