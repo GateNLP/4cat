@@ -59,7 +59,5 @@ echo ''
 # Start 4CAT backend
 python3 4cat-daemon.py start
 
-# Hang out until SIGTERM received
-while true; do
-    sleep 1
-done
+# Tail logs and wait for SIGTERM
+exec tail -f -n 3 logs/backend_4cat.log & wait $!
