@@ -15,6 +15,36 @@ db = Database(logger=log, dbname=config.get('DB_NAME'), user=config.get('DB_USER
               host=config.get('DB_HOST'), port=config.get('DB_PORT'), appname="4cat-migrate")
 
 # ---------------------------------------------
+#   Telegram events and google drive updates
+# ---------------------------------------------
+print(" Checking if datasets table has a column 'is_continuous'...")
+has_column = db.fetchone("SELECT COUNT(*) AS num FROM information_schema.columns WHERE table_name = 'datasets' AND column_name = 'is_continuous'")
+if has_column["num"] == 0:
+    print("  ...No, adding.")
+    db.execute("ALTER TABLE datasets ADD COLUMN is_continuous BOOLEAN DEFAULT FALSE")
+    db.commit()
+else:
+    print("  ...Yes, nothing to update.")
+
+print(" Checking if datasets table has a column 'num_files'...")
+has_column = db.fetchone("SELECT COUNT(*) AS num FROM information_schema.columns WHERE table_name = 'datasets' AND column_name = 'num_files'")
+if has_column["num"] == 0:
+    print("  ...No, adding.")
+    db.execute("ALTER TABLE datasets ADD COLUMN num_files INTEGER DEFAULT 1")
+    db.commit()
+else:
+    print("  ...Yes, nothing to update.")
+
+print(" Checking if datasets table has a column 'drive_dir_id'...")
+has_column = db.fetchone("SELECT COUNT(*) AS num FROM information_schema.columns WHERE table_name = 'datasets' AND column_name = 'drive_dir_id'")
+if has_column["num"] == 0:
+    print("  ...No, adding.")
+    db.execute("ALTER TABLE datasets ADD COLUMN drive_dir_id TEXT")
+    db.commit()
+else:
+    print("  ...Yes, nothing to update.")
+
+# ---------------------------------------------
 # Update config file with new events/drive settings
 # ---------------------------------------------
 config_path = Path(__file__).parent.parent.parent.joinpath("config/config.ini")
