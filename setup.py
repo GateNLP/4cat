@@ -23,9 +23,6 @@ packages = [
 	"Flask_Login~=0.6",
 	"gensim>=4.1.0, <4.2",
 	"google_api_python_client==2.0.2",
-	"google-auth==2.15.0",
-	"google-auth-httplib2=0.1.0",
-	"google-auth-oauthlib==0.8.0",
 	"html2text==2020.*",
 	"ImageHash~=4.2.0",
 	"lxml~=4.9.0",
@@ -56,6 +53,8 @@ packages = [
 	"unidecode~=1.3",
 	"Werkzeug~=2.2",
 	"wordcloud~=1.8",
+	"Authlib~=1.2.0",
+	"PyDrive~=1.3.1",
 	"videohash==3.0.1",
 	"videohash @ https://github.com/dale-wahl/videohash/archive/refs/heads/main.zip",
 	"en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.4.1/en_core_web_sm-3.4.1.tar.gz#egg=en_core_web_sm"
