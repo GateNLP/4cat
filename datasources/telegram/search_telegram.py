@@ -52,7 +52,7 @@ class SearchTelegram(Search):
     flawless = True
     end_if_rate_limited = 600  # break if Telegram requires wait time above number of seconds
 
-    max_workers = 1
+    max_workers = 10
     max_retries = 3
 
     options = {
