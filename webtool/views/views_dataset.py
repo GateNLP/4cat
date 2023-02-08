@@ -97,8 +97,10 @@ def show_results(page):
 
     # empty datasets could just have no results, or be failures. we make no
     # distinction here
+    # if they're continuous and not finished though, we still want to show them
     if filters["hide_empty"]:
-        where.append("num_rows > 0 OR (is_continuous = TRUE AND is_finished = FALSE)")
+        where.append("num_rows > 0 OR (is_continuous = TRUE AND is_finished = FALSE AND ((is_private = FALSE OR owner = %s)))")
+        replacements.append(current_user.get_id())
 
     # the user filter is only exposed to admins, and otherwise emulates the
     # 'own' option
