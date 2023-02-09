@@ -351,8 +351,12 @@ def queue_dataset():
 	# potentially fragmentary input, e.g. only the first bytes of a file upload
 	# are sent for validation. This makes the front-end re-submit the full
 	# query
+	# added json.dumps: json expects "true/false" for booleans, where python
+	# dicts have "True/False". This leads to an odd case where all boolean query
+	# params show up as "true" no matter what the user selected
+	# todo: check precisely why the original actually fails in the first place
 	if not has_confirm:
-		return jsonify({"status": "validated", "keep": sanitised_query})
+		return jsonify({"status": "validated", "keep": json.dumps(sanitised_query)})
 
 	sanitised_query["datasource"] = datasource_id
 	sanitised_query["type"] = search_worker_id
