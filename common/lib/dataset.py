@@ -1354,6 +1354,7 @@ class DataSet(FourcatModule):
 		"""
 		user_data = self.db.fetchone("SELECT userdata FROM users WHERE name = \'%s\';" % self.get_owner())
 		user_data = json.loads(user_data["userdata"])
+		credentials = None
 
 		try:
 			credentials = google.oauth2.credentials.Credentials(
@@ -1364,11 +1365,10 @@ class DataSet(FourcatModule):
 				token_uri="https://www.googleapis.com/oauth2/v4/token"
 			)
 
-			return credentials
-
 		except KeyError:
 			self.update_status("Cannot find details to access google drive.")
-			return None
+
+		return credentials
 
 	def __getattr__(self, attr):
 		"""

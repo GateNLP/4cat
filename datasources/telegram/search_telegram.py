@@ -269,11 +269,14 @@ class SearchTelegram(Search):
 
         # set up google drive client if we're going to need it
         if save_to_gdrive:
-            try:
-                credentials = self.dataset.get_owner_drive_credentials()
+            credentials = self.dataset.get_owner_drive_credentials()
+            if credentials:
                 drive_client = build('drive', 'v3', credentials=credentials)
-            except KeyError:
-                self.dataset.update_status("Could not validate with google. Nothing will be uploaded to google drive.")
+            else:
+                self.dataset.update_status("You have selected \"Save to Google Drive\", but  4cat cannot access your "
+                                           "drive. Use the \"Login to Google Drive\" button above before starting a new "
+                                           "collection")
+                return []
 
         # Telethon requires the offset date to be a datetime date
         max_date = parameters.get("max_date")
@@ -1161,7 +1164,9 @@ class SearchTelegram(Search):
 
             self.dataset.update_status("Finished writing subfile to google drive")
 
+        #catch all for now, finesse later
         except Exception as e:
-            self.dataset.update_status("Failed to write file %s to google drive" % str(file_path.name))
-            self.dataset.update_status("Error is %s" % str(e))
+            self.dataset.update_status("Failed to write file %s to google drive. Ignoring, and continuing "
+                                       "with collection." % (str(file_path.name)))
+            self.log.error("Telegram: %s\n%s" % (str(e), traceback.format_exc()))
             return
