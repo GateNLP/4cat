@@ -301,6 +301,7 @@ class SearchTelegram(Search):
             if continue_collection:
                 self.dataset.mark_continuous()
                 cont_posts = await self.continuous_collection(client, queries, max_date, max_items, drive_client)
+                self.dataset.update_status("Stopping ongoing collection due to user request.")
                 posts = posts + cont_posts
             return posts
         except ProcessorInterruptedException as e:
@@ -1039,7 +1040,7 @@ class SearchTelegram(Search):
         while True:
             try:
                 # https://stackoverflow.com/questions/61022878/how-to-run-a-thread-alongside-telethon-client
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1)
 
                 if len(continuous_posts) >= max_items:
                     await self.save_files(continuous_posts, gdrive_client)
@@ -1053,9 +1054,7 @@ class SearchTelegram(Search):
                         await self.save_files(continuous_posts, gdrive_client)
                         final_file_posts = final_file_posts + continuous_posts
 
-
                     await self.save_to_zip_file()
-                    self.dataset.update_status("Stopping ongoing collection due to user request")
                     self.interrupted = False
                     break
 
