@@ -692,20 +692,16 @@ def delete_dataset(key=None):
 @openapi.endpoint("tool")
 def stop_dataset(key=None):
 	"""
-	Delete a dataset
+	Stop a dataset
 
-	Only available to administrators and dataset owners. Deletes a dataset, as
-	well as any children linked to it, from 4CAT. Also tells the backend to stop
-	any jobs dealing with the dataset.
+	Only available to dataset owners. Stops a dataset, as well as any children linked to it, from 4CAT.
+	Also tells the backend to stop any jobs dealing with the dataset.
 
-	:request-param str key:  ID of the dataset to delete
-    :request-param str ?access_token:  Access token; only required if not
-    logged in currently.
+	:request-param str key:  ID of the dataset to stop
+    :request-param str ?access_token:  Access token; only required if not logged in currently.
 
 	:return: A dictionary with a successful `status`.
-
 	:return-schema: {type=object,properties={status={type=string}}}
-
 	:return-error 404:  If the dataset does not exist.
 	"""
 	dataset_key = request.form.get("key", "") if not key else key
@@ -720,6 +716,7 @@ def stop_dataset(key=None):
 
 	# if there is an active or queued job for some child dataset, cancel and
 	# delete it
+	# telegram doesn't have any auto child jobs yet, but surely we would want to run them even if we did stop?
 	children = dataset.get_all_children()
 	for child in children:
 		try:
@@ -733,7 +730,6 @@ def stop_dataset(key=None):
 
 	# now cancel and delete the job for this one (if it exists)
 	try:
-		job = Job.get_by_remote_ID(dataset.key, database=db, jobtype=dataset.type)
 		call_api("cancel-job", {"remote_id": dataset.key, "jobtype": dataset.type, "level": BasicWorker.INTERRUPT_STOP})
 	except JobNotFoundException:
 		pass

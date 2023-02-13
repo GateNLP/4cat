@@ -195,9 +195,11 @@ class WorkerManager:
 			return
 
 		for worker in self.worker_pool[jobtype]:
-			if interrupt_level is not worker.INTERRUPT_STOP:
-				if (job and worker.job.data["id"] == job.data["id"]) or (worker.job.data["jobtype"] == jobtype and worker.job.data["remote_id"] == remote_id):
-					# first cancel any interruptable queries for this job's worker
+			if (job and worker.job.data["id"] == job.data["id"]) or (worker.job.data["jobtype"] == jobtype and worker.job.data["remote_id"] == remote_id):
+				# first cancel any interruptable queries for this job's worker
+				# if stopping though, we don't actually want to cancel yet. we just want to let the worker know a
+				# stop request has been made
+				if interrupt_level is not worker.INTERRUPT_STOP:
 					while True:
 						active_queries = self.queue.get_all_jobs("cancel-pg-query", remote_id=worker.db.appname, restrict_claimable=False)
 						if not active_queries:
@@ -215,6 +217,6 @@ class WorkerManager:
 						# give the cancel job a moment to run
 						time.sleep(0.25)
 
-			# now all queries are interrupted, formally request an abort
-			worker.request_interrupt(interrupt_level)
-			return
+				# now all queries are interrupted, formally request an abort
+				worker.request_interrupt(interrupt_level)
+				return
