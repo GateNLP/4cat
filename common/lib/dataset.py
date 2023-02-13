@@ -536,12 +536,24 @@ class DataSet(FourcatModule):
 		# delete from database
 		self.db.delete("datasets", where={"key": self.key}, commit=commit)
 
-		# delete from drive
+		# delete results and log from drive
 		try:
 			self.get_results_path().unlink()
+			self.get_log_path().unlink()
 		except FileNotFoundError:
 			# already deleted, apparently
 			pass
+
+		# delete subfiles and zip file from drive
+		try:
+			for file in self.get_subfile_paths():
+				file.unlink()
+
+			self.get_zip_path().unlink()
+
+		except FileNotFoundError:
+			pass
+
 
 	def update_children(self, **kwargs):
 		"""
