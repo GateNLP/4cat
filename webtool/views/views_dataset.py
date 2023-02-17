@@ -13,6 +13,7 @@ from flask import render_template, request, redirect, send_from_directory, flash
     url_for, stream_with_context
 from flask_login import login_required, current_user
 
+from common.lib.job import Job
 from webtool import app, db, log
 from webtool.lib.helpers import Pagination, error
 from webtool.views import google_auth
@@ -330,6 +331,49 @@ def preview_items(key, subfile=None):
         return render_template("preview/csv.html", rows=rows, max_items=preview_size,
                                dataset=dataset)
 
+
+@app.route("/upload_file/<string:key>/<string:file_name>")
+def upload_to_gdrive(key, file_name):
+    """
+    Run the job to upload a file to google drive
+
+   :param str key:  Dataset key
+   :param str file_name:  file to be uploaded
+
+   :return:  redirect
+   """
+
+    try:
+        dataset = DataSet(key=key, db=db)
+    except TypeError:
+        return error(404, error="Dataset not found.")
+
+    if dataset.is_private and not (current_user.is_admin or dataset.owner == current_user.get_id()):
+        return error(403, error="This dataset is private.")
+
+    #todo: unhardcode these
+    mime_type = "application/x-ndjson"
+    directory = "/usr/src/app/data/"
+    file_path = str(directory) + file_name
+
+    queue = JobQueue(logger=log, database=db)
+
+    analysis = DataSet(parent=dataset.key,
+                       parameters={"file-path": file_path, "uploaded-file-name": file_name, "mime-type": mime_type},
+                       db=db,
+                       extension="ndjson",
+                       type="upload-to-gdrive",
+                       is_private=dataset.is_private,
+                       owner=current_user.get_id()
+                       )
+
+    if analysis.is_new:
+        queue.add_job(jobtype="upload-to-gdrive", remote_id=analysis.key)
+        job = Job.get_by_remote_ID(analysis.key, database=db)
+        analysis.link_job(job)
+        analysis.update_status("Queued")
+
+    return redirect("/results/" + key + "/")
 
 """
 Individual result pages

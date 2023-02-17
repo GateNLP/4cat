@@ -1042,7 +1042,11 @@ class SearchTelegram(Search):
                 # https://stackoverflow.com/questions/61022878/how-to-run-a-thread-alongside-telethon-client
                 await asyncio.sleep(0.1)
 
-                if len(continuous_posts) >= max_items:
+                # todo: better approach maybe needed
+                now = datetime.now()
+                is_eod = now.hour == 23 and now.minute == 59 and now.second == 59
+
+                if (len(continuous_posts) >= max_items) or (is_eod and len(continuous_posts)):
                     await self.save_files(continuous_posts, gdrive_client)
                     final_file_posts = final_file_posts + continuous_posts
                     continuous_posts.clear()
@@ -1104,23 +1108,24 @@ class SearchTelegram(Search):
 
         results_file = self.dataset.get_results_path()
         file_count = self.dataset.get_num_files() + 1
-        subfile_path = Path(str(results_file.parent) + "/" + results_file.stem + "-" + str(file_count) + results_file.suffix)
+        subfile_name = str(results_file.stem) + "-" + str(file_count) + str(results_file.suffix)
+        subfile_path = Path(str(results_file.parent) + "/" + subfile_name)
 
         if items:
             self.dataset.update_status("Writing currently collected data to dataset file")
             if results_file.suffix == ".ndjson":
                 self.items_to_ndjson(items, subfile_path)
+                record = self.dataset.add_subfile_record(subfile_name, "ndjson")
                 if gdrive_client:
-                    await self.save_to_google_drive(gdrive_client, subfile_path, "application/x-ndjson")
+                    await self.save_to_google_drive(gdrive_client, subfile_path, record, "application/x-ndjson")
 
             elif results_file.suffix == ".csv":
                 self.items_to_csv(items, subfile_path)
+                record = self.dataset.add_subfile_record(subfile_name, "csv")
                 if gdrive_client:
-                    await self.save_to_google_drive(gdrive_client, subfile_path, "text/csv")
+                    await self.save_to_google_drive(gdrive_client, subfile_path,  record, "text/csv")
             else:
                 raise NotImplementedError("Datasource query cannot be saved as %s file" % results_file.suffix)
-
-            self.dataset.increase_num_files()
 
     async def save_to_zip_file(self):
         """
@@ -1136,12 +1141,13 @@ class SearchTelegram(Search):
 
         zip_obj.close()
 
-    async def save_to_google_drive(self, gdrive_client, file_path, mime_type):
+    async def save_to_google_drive(self, gdrive_client, file_path, record, mime_type):
         """
        Save given file to google drive
 
        :params gdrive_client: client to interact with google drive
        :params file_path: path of file to upload
+       :params record: the database record linked to this file
        :params mime_type: mime type of file to upload
        """
 
@@ -1157,15 +1163,16 @@ class SearchTelegram(Search):
             file_data = open(path, 'rb')
 
             media_body = MediaIoBaseUpload(file_data, mimetype=mime_type, resumable=True)
-
             gdrive_client.files().create(body=body, media_body=media_body,
                                          fields='id,name,mimeType,createdTime,modifiedTime').execute()
+
+            record.change_uploaded_date(int(time.time()))
 
             self.dataset.update_status("Finished writing subfile to google drive")
 
         #catch all for now, finesse later
         except Exception as e:
             self.dataset.update_status("Failed to write file %s to google drive. Ignoring, and continuing "
-                                       "with collection." % (str(file_path.name)))
+                                       "with collection. " % (str(file_path.name)))
             self.log.error("Telegram: %s\n%s" % (str(e), traceback.format_exc()))
             return

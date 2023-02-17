@@ -45,6 +45,28 @@ else:
     print("  ...Yes, nothing to update.")
 
 # ---------------------------------------------
+# Adding a subfile table
+# ---------------------------------------------
+
+print("  Checking if subfiles table exist... ", end="")
+annotations_table = db.fetchone("SELECT EXISTS ( SELECT FROM information_schema.tables WHERE table_name = 'subfiles')")
+
+if not annotations_table["exists"]:
+    print("No, creating it now.")
+
+    db.execute("""CREATE TABLE IF NOT EXISTS subfiles (
+        id                SERIAL PRIMARY KEY,
+        key               text,
+        file_path         text,
+        file_type	     text DEFAULT '',
+        saved_date	     integer,
+        uploaded_date      integer
+        owner             VARCHAR DEFAULT 'anonymous',)""")
+
+else:
+    print("Indeed it exists. Moving on.")
+
+# ---------------------------------------------
 # Update config file with new events/drive settings
 # ---------------------------------------------
 config_path = Path(__file__).parent.parent.parent.joinpath("config/config.ini")

@@ -2,6 +2,7 @@ import collections
 import datetime
 import hashlib
 import fnmatch
+import math
 import shutil
 import json
 import time
@@ -19,6 +20,7 @@ from common.lib.job import Job, JobNotFoundException
 from common.lib.helpers import get_software_version, NullAwareTextIOWrapper
 from common.lib.fourcat_module import FourcatModule
 from common.lib.exceptions import ProcessorInterruptedException
+from common.lib.subfile import Subfile
 
 
 class DataSet(FourcatModule):
@@ -546,6 +548,8 @@ class DataSet(FourcatModule):
 
 		# delete subfiles and zip file from drive
 		try:
+			self.db.delete("subfiles", where={"key": self.key}, commit=commit)
+
 			for file in self.get_subfile_paths():
 				file.unlink()
 
@@ -1277,24 +1281,48 @@ class DataSet(FourcatModule):
 
 		return self.get_num_files()
 
+	def add_subfile_record(self, path, file_type):
+		"""
+		Add subfile record to dataset
+
+		Any time a batch file is added, a record should be created in the linked subfile table
+		so its status over time (uploaded etc.) can be tracked
+
+		:return Subfile:  created record
+		"""
+		subfile_record = Subfile(db=self.db, key=self.key, file_path=path, file_type=file_type,
+								 saved_date=math.floor(int(time.time())), owner=self.get_owner())
+
+		self.data["num_files"] = self.data["num_files"] + 1
+		self.db.update("datasets", where={"key": self.data["key"]}, data={"num_files": self.data["num_files"]})
+
+		return subfile_record
+
+	def get_subfiles(self):
+		"""
+		Gets subfile records linked to this dataset
+
+		:return List:  A list of the linked subfile records
+		"""
+		subfile_records = self.db.fetchall("SELECT * FROM subfiles WHERE key = %s order by subfiles.file_path", (self.key,))
+		return subfile_records;
+
 	def get_subfile_paths(self):
 		"""
 		Get path to individual results files in case of continuous collection
 
-		Will return a list of files based on the original file name and the
-		number of files which are listed to exist in the dataset
+		Will return a list of files based on the data in the subfiles table linked to
+		this dataset
 
 		:return List:  A path to the results files
 		"""
 
 		file_paths = []
-		num_files = self.data["num_files"]
-		result_path = self.data["result_file"]
-		index_of_extension = result_path.index(".")
 
-		for i in range(num_files):
-			filename = result_path[:index_of_extension] + "-" + str(i+1) + result_path[index_of_extension:]
-			file_paths.append(self.folder.joinpath(filename))
+		subfiles = self.get_subfiles()
+
+		for subfile in subfiles:
+			file_paths.append(self.folder.joinpath(subfile["file_path"]))
 
 		return file_paths
 

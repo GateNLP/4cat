@@ -1,10 +1,13 @@
 """
 Upload specific file to google drive
 """
+import time
+
 import googleapiclient
 from googleapiclient.http import MediaIoBaseUpload
 
 from backend.abstract.processor import BasicProcessor
+from common.lib.subfile import Subfile
 from common.lib.user_input import UserInput
 
 __author__ = "Muneerah Patel"
@@ -83,12 +86,15 @@ class UploadToGDrive(BasicProcessor):
 			drive_api.create(body=body, media_body=media_body,
 							 fields='id,name,mimeType,createdTime,modifiedTime').execute()
 
+			subfile_record = Subfile(db=self.db, key=self.dataset.get_parent().key, file_path=uploaded_filename)
+			subfile_record.change_uploaded_date(int(time.time()))
+
 			processed+=1
 
 		except KeyError as e:
 			self.dataset.update_status("Cannot find drive. It looks like you might need to log into google")
 		except Exception as e:
-			self.dataset.update_status("Could not upload file to google. Please try again later.")
+			self.dataset.update_status(e)
 
 
 		# done!
