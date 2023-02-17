@@ -55,13 +55,13 @@ if not annotations_table["exists"]:
     print("No, creating it now.")
 
     db.execute("""CREATE TABLE IF NOT EXISTS subfiles (
-        id                SERIAL PRIMARY KEY,
-        key               text,
-        file_path         text,
+        id               SERIAL PRIMARY KEY,
+        key              text,
+        file_path        text,
         file_type	     text DEFAULT '',
         saved_date	     integer,
-        uploaded_date      integer
-        owner             VARCHAR DEFAULT 'anonymous',)""")
+        uploaded_date    integer,
+        owner            VARCHAR DEFAULT 'anonymous')""")
 
 else:
     print("Indeed it exists. Moving on.")
