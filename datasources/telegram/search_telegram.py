@@ -1113,8 +1113,8 @@ class SearchTelegram(Search):
         """
 
         results_file = self.dataset.get_results_path()
-        file_count = self.dataset.get_num_files() + 1
-        subfile_name = str(results_file.stem) + "-" + str(file_count) + str(results_file.suffix)
+        timestr = time.strftime("%Y%m%d_%H%M%S")
+        subfile_name = str(results_file.stem) + "-" + timestr + str(results_file.suffix)
         subfile_path = Path(str(results_file.parent) + "/" + subfile_name)
 
         if items:
@@ -1143,7 +1143,7 @@ class SearchTelegram(Search):
         zip_obj = ZipFile(str(self.dataset.get_results_path()) + ".zip", 'w')
 
         for i in self.dataset.get_subfile_paths():
-            zip_obj.write(i)
+            zip_obj.write(i, arcname=str(i.name))
 
         zip_obj.close()
 
