@@ -527,7 +527,11 @@ class SearchTelegram(Search):
         :param Message message:  Message to parse
         :return dict:  4CAT-compatible item object
         """
-        if message["_chat"]["username"]:
+
+        # todo: not sure why this happens, quick fix for now
+        if message["_chat"] is None:
+            thread = "ERROR-NO-CHAT"
+        elif message["_chat"]["username"]:
             # chats can apparently not have usernames???
             # truly telegram objects are way too lenient for their own good
             thread = message["_chat"]["username"]
@@ -677,9 +681,11 @@ class SearchTelegram(Search):
                             forwarded_username = chat["username"]
 
         msg = {
+            # thread id and chat id are the same thing. i guess this
+            # is a result of abstracting for multiple platforms?
             "id": message["id"],
             "thread_id": thread,
-            "chat": message["_chat"]["username"],
+            "chat": thread,
             "author": user_id,
             "author_username": username,
             "author_name": fullname,
