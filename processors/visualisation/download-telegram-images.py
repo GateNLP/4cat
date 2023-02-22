@@ -10,7 +10,7 @@ import googleapiclient
 from pathlib import Path
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
-from telethon import TelegramClient
+from telethon import TelegramClient, utils, types
 from zipfile import ZipFile
 
 import common.config_manager as config
@@ -177,10 +177,13 @@ class TelegramImageDownloader(BasicProcessor):
             if not message.get("attachment_data") or message.get("attachment_type") not in downloadable_types:
                 continue
 
-            if message["chat"] not in messages_with_photos:
-                messages_with_photos[message["chat"]] = []
+            # probably should make this backward compatible
+            key_to_use = "thread_num_id" if "thread_num_id" in message.keys() else message["chat"]
 
-            messages_with_photos[message["chat"]].append(int(message["id"]))
+            if message[key_to_use] not in messages_with_photos:
+                messages_with_photos[message[key_to_use]] = []
+
+            messages_with_photos[message[key_to_use]].append(int(message["id"]))
             total_media += 1
 
             if amount and total_media >= amount:
@@ -193,13 +196,16 @@ class TelegramImageDownloader(BasicProcessor):
 
         for entity, message_ids in messages_with_photos.items():
             try:
-                async for message in client.iter_messages(entity=entity, ids=message_ids):
+                channel_to_add = utils.get_peer_id(types.PeerChannel(entity))
+                self.dataset.log("resolved entity to get images from is is %s" % (str(channel_to_add)))
+
+                async for message in client.iter_messages(entity=channel_to_add, ids=message_ids):
                     if self.interrupted:
                         raise ProcessorInterruptedException("Interrupted while downloading images")
 
                     success = False
                     try:
-                        if upload_to_drive and (media_done - 1) and (media_done - 1) % 10 == 0:
+                        if upload_to_drive and (media_done - 1) and (media_done - 1) % 100 == 0:
                             self.save_to_gdrive(drive_client, zip_file_count)
                             zip_file_count += 1
 

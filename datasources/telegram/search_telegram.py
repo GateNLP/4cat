@@ -530,16 +530,23 @@ class SearchTelegram(Search):
 
         # todo: not sure why this happens, quick fix for now
         if message["_chat"] is None:
-            thread = "ERROR-NO-CHAT"
-        elif message["_chat"]["username"]:
-            # chats can apparently not have usernames???
-            # truly telegram objects are way too lenient for their own good
-            thread = message["_chat"]["username"]
-        elif message["_chat"]["title"]:
-            thread = re.sub(r"\s", "", message["_chat"]["title"])
+            thread = "error-no-chat"
         else:
-            # just give up
-            thread = "unknown"
+            if message["_chat"]["username"]:
+                # chats can apparently not have usernames???
+                # truly telegram objects are way too lenient for their own good
+                thread = message["_chat"]["username"]
+            elif message["_chat"]["title"]:
+                thread = re.sub(r"\s", "", message["_chat"]["title"])
+            else:
+                # just give up
+                thread = "unknown"
+
+            if message["_chat"]["id"]:
+                thread_num_id = message["_chat"]["id"]
+            else:
+                # just give up
+                thread_num_id = "unknown"
 
         # determine username
         # API responses only include the user *ID*, not the username, and to
@@ -681,11 +688,12 @@ class SearchTelegram(Search):
                             forwarded_username = chat["username"]
 
         msg = {
-            # thread id and chat id are the same thing. i guess this
-            # is a result of abstracting for multiple platforms?
+            # thread and chat are for some reason kept the same in the original (or similar: the latter doesn't null
+            # check. introducing thread_num_id for the actual id of the chat)
             "id": message["id"],
+            "thread_num_id": thread_num_id,
             "thread_id": thread,
-            "chat": thread,
+            "chat":  thread,
             "author": user_id,
             "author_username": username,
             "author_name": fullname,
