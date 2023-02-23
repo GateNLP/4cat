@@ -112,7 +112,8 @@ class SearchTelegram(Search):
                        "stopped). If the min date is not set to \"today\", messages from prior to today will first be "
                        "collected, then the processor will switch to listening out for new messages and some message "
                        "updates. Note that the \"max items\" field will still apply per channel for existing messages "
-                       "(collected prior to today), but will be ignored when collecting new messages."
+                       "(collected prior to today), but will then be used to determine the amount of new messages to "
+                       "collect before creating a new results subfile."
         },
         "divider-2": {
             "type": UserInput.OPTION_DIVIDER
@@ -139,7 +140,7 @@ class SearchTelegram(Search):
         "save-to-gdrive": {
             "type": UserInput.OPTION_TOGGLE,
             "help": "Save to google drive:",
-            "default": True
+            "default": False
         },
         "resolve-entities-intro": {
             "type": UserInput.OPTION_INFO,
