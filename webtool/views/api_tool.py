@@ -453,7 +453,8 @@ def check_dataset():
 		"empty": (dataset.data["num_rows"] == 0),
 		"is_favourite": (db.fetchone("SELECT COUNT(*) AS num FROM users_favourites WHERE name = %s AND key = %s",
 									 (current_user.get_id(), dataset.key))["num"] > 0),
-		"url": url_for("show_result", key=dataset.key, _external=True)
+		"url": url_for("show_result", key=dataset.key, _external=True),
+		"subfile_html": render_template("result-subfile-row.html", dataset=dataset)
 	}
 
 	return jsonify(status)
@@ -1017,6 +1018,7 @@ def check_processor():
                                     query=dataset.get_genealogy()[0], parent_key=top_parent.key,
                                     processors=backend.all_modules.processors),
 			"resultrow_html": render_template("result-result-row.html", dataset=top_parent),
+			"subfile_html": render_template("result-subfile-row.html", dataset=top_parent),
 			"url": "/result/" + dataset.data["result_file"]
 		})
 

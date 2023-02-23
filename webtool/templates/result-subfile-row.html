@@ -1,46 +1,56 @@
-{% set item = subfile %}
+<div class="fullwidth" id="subfile-result">
+    {% set filepath = dataset.get_zip_path() %}
+</div>
 
-<ul>
-    <li>
-        <i class="fa fa-file" aria-hidden="true"></i>
-        <em> {{ item.file_path.split("-")[2] }}</em>
-    </li>
-    <li>
-        <a href="{{ url_for('get_result', query_file=item.file_path) }}">
-            <i class="fas fa-download" aria-hidden="true"></i>
-            {{ item.file_path.split(".")[1] }}
-        </a>
-    </li>
-    {% if dataset.get_extension() != "csv" and dataset.get_own_processor().map_item %}
-        <li>
-        <a href="{{ url_for('get_mapped_subfile_result', key=dataset.key, file=item.file_path) }}">
-            <i class="fas fa-download" aria-hidden="true"></i>
-            csv
-        </a>
-        </li>
-    {% endif %}
-    {% if dataset.get_extension() in ("csv", "gexf") or dataset.get_own_processor().map_item %}
-        <li>
-        <a href="{{ url_for('preview_subfile', key=dataset.key, file=file_path) }}"
-           data-load-from="{{ url_for('preview_subfile', key=dataset.key,  file=item.file_path) }}" class="popup-trigger"
-           aria-controls="popup-preview-{{ dataset.key }}">
-            <i class="fa fa-eye" aria-hidden="true"></i> Preview
-        </a>
-        <div role="dialog" id="popup-preview-{{ dataset.key }}"></div>
-        </li>
-    {% endif %}
-    {% if dataset.parameters["save-to-gdrive"] %}
-        {% if subfile.uploaded_date %}
+{% for subfile in dataset.get_subfiles() %}
+    {% set item = subfile %}
+
+    <div  id="subfile-result">
+        <ul>
             <li>
-                <i class="fa fa-check" aria-hidden="true"></i> Uploaded to drive
+                <i class="fa fa-file" aria-hidden="true"></i>
+                <em> {{ item.file_path.split("-")[2] }}</em>
             </li>
-        {% else %}
             <li>
-                <a href="{{ url_for('upload_to_gdrive', key=item.key, file_name=item.file_path) }}"
-                   aria-controls="popup-preview-{{ dataset.key }}">
-                    <i class="fa fa-cloud-upload" aria-hidden="true"></i> Upload to drive
+                <a href="{{ url_for('get_result', query_file=item.file_path) }}">
+                    <i class="fas fa-download" aria-hidden="true"></i>
+                    {{ item.file_path.split(".")[1] }}
                 </a>
             </li>
-        {% endif %}
-    {% endif %}
-</ul>
+            {% if dataset.get_extension() != "csv" and dataset.get_own_processor().map_item %}
+                <li>
+                <a href="{{ url_for('get_mapped_subfile_result', key=dataset.key, file=item.file_path) }}">
+                    <i class="fas fa-download" aria-hidden="true"></i>
+                    csv
+                </a>
+                </li>
+            {% endif %}
+            {% if dataset.get_extension() in ("csv", "gexf") or dataset.get_own_processor().map_item %}
+                <li>
+                <a href="{{ url_for('preview_subfile', key=dataset.key, file=file_path) }}"
+                   data-load-from="{{ url_for('preview_subfile', key=dataset.key,  file=item.file_path) }}" class="popup-trigger"
+                   aria-controls="popup-preview-{{ dataset.key }}">
+                    <i class="fa fa-eye" aria-hidden="true"></i> Preview
+                </a>
+                <div role="dialog" id="popup-preview-{{ dataset.key }}"></div>
+                </li>
+            {% endif %}
+            {% if dataset.parameters["save-to-gdrive"] %}
+                {% if subfile.uploaded_date %}
+                    <li>
+                        <i class="fa fa-check" aria-hidden="true"></i> Uploaded to drive
+                    </li>
+                {% else %}
+                    <li>
+                        <a href="{{ url_for('upload_to_gdrive', key=item.key, file_name=item.file_path) }}"
+                           aria-controls="popup-preview-{{ dataset.key }}">
+                            <i class="fa fa-cloud-upload" aria-hidden="true"></i> Upload to drive
+                        </a>
+                    </li>
+                {% endif %}
+            {% endif %}
+        </ul>
+    </div>
+
+{% endfor %}
+

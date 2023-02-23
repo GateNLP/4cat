@@ -282,10 +282,7 @@ const processor = {
 			method: 'POST',
 			data: {key: $(this).attr('data-key')},
 			success: function(json) {
-				$('li#child-' + json.key).animate({height: 0}, 200, function() { $(this).remove(); });
-				if($('.child-list.top-level li').length === 0) {
-					$('#child-tree-header').attr('aria-hidden', 'true').addClass('collapsed');
-				}
+				window.location.reload()
 				query.enable_form();
 			},
 			error: function(json) {
@@ -554,6 +551,16 @@ const query = {
                         return;
                     }
 
+                    let subfile_list = $('#subfile-list');
+
+                    if(subfile_list) {
+                        let subfile_now = subfile_list.html();
+
+                        if (json.subfile_html && subfile_now != json.subfile_html) {
+                            subfile_list.html(json.subfile_html)
+                        }
+                    }
+
                     let status_field = container.find('.dataset-status')
                     let current_status = status_field.html();
                     applyProgress(status_field, json.progress);
@@ -601,6 +608,17 @@ const query = {
                     }
 
                     $('#dataset-results').html(child.resultrow_html);
+
+                    let subfile_list = $('#subfile-list');
+
+                    if (subfile_list) {
+                        let subfile_now = subfile_list.html();
+
+                        if (subfile_now != child.subfile_html) {
+                            subfile_list.html(child.subfile_html)
+                        }
+                    }
+
 
                     target.replaceWith(update);
                     update.addClass('updated');

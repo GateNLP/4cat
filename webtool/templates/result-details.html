@@ -144,15 +144,7 @@
             </h3>
 
             <ol id="subfile-list" class="subfile-list">
-                <div class="fullwidth" id="subfile-result">
-                    {% set filepath = dataset.get_zip_path() %}
-                    {% include "result-zipfile-row.html" %}
-                </div>
-                {% for subfile in dataset.get_subfiles() %}
-                    <div  id="subfile-result">
-                        {% include "result-subfile-row.html" %}
-                    </div>
-                {% endfor %}
+                    {% include "result-subfile-row.html" %}
             </ol>
         </section>
 
