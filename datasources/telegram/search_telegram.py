@@ -3,7 +3,6 @@ Search Telegram via API
 """
 import functools
 import traceback
-import binascii
 import datetime
 import hashlib
 import asyncio
@@ -299,12 +298,18 @@ class SearchTelegram(Search):
         try:
             async for post in self.gather_posts(client, queries, max_items, min_date, max_date):
                 posts.append(post)
+
+            initial_file = False if self.dataset.get_last_update_markers() else True
+            await self.save_files(posts, drive_client, initial_file=initial_file)
+
             if continue_collection:
                 self.dataset.mark_continuous()
                 cont_posts = await self.continuous_collection(client, queries, max_date, max_items, drive_client)
                 self.dataset.update_status("Stopping ongoing collection due to user request.")
-                posts = posts + cont_posts
+                posts = cont_posts
+
             return posts
+
         except ProcessorInterruptedException as e:
             raise e
         except Exception as e:
@@ -338,6 +343,7 @@ class SearchTelegram(Search):
         processed = 0
         for query in queries:
             delay = 10
+            min_id = 0
             retries = 0
             processed += 1
             reply_channel_added = False
@@ -361,7 +367,18 @@ class SearchTelegram(Search):
                     except ValueError:
                         pass
 
-                    async for message in client.iter_messages(entity=query, offset_date=max_date):
+                    if self.dataset.is_continuous() and self.dataset.get_last_update_markers():
+
+                        self.dataset.update_status("It looks like this is a continuous collector which has been "
+                                                   "restarted, so only retrieving missing posts since then.")
+
+                        markers = self.dataset.get_last_update_markers()
+                        query = await client.get_peer_id(query)
+
+                        if query and markers[str(query)]:
+                            min_id = markers[str(query)]
+
+                    async for message in client.iter_messages(entity=query, offset_date=max_date, min_id=min_id):
                         entity_posts += 1
                         i += 1
                         if self.interrupted:
@@ -1109,7 +1126,41 @@ class SearchTelegram(Search):
 
         return final_file_posts
 
-    async def save_files(self, items, gdrive_client):
+    def update_latest_markers(self, continuous_posts):
+        """
+        Updates the database to store the id of the last saved post for each entity being collected from
+        This is to allow 4Cat to pick up any missing posts should the application restart whilst a continuous
+        collection is in progress
+
+        :param continuous_posts: the set of posts which have been saved
+        """
+
+        final_message_ids = {} if not self.dataset.get_last_update_markers() else self.dataset.get_last_update_markers()
+        continuous_posts.reverse()
+
+        try:
+            channels = set([record["_input_chat"]["channel_id"] for record in continuous_posts])
+
+            for channel in channels:
+                record = next(post for post in continuous_posts if post["_input_chat"]["channel_id"] == channel)
+
+                if record:
+                    message_id = record["id"]
+                    channel_id = str(utils.get_peer_id(types.PeerChannel(channel)))
+
+                    if channel_id in final_message_ids.keys():
+                        final_message_ids.update({channel_id: message_id})
+                    else:
+                        final_message_ids[channel_id] = message_id
+
+            self.dataset.update_last_update_markers(final_message_ids)
+
+        except KeyError as e:
+            self.dataset.log("Error: %s" % e)
+            self.dataset.update_status("It looks like we are unable to retrive either the message of channel id")
+
+
+    async def save_files(self, items, gdrive_client, initial_file=False):
         """
         Save subfile to dataset
 
@@ -1123,7 +1174,9 @@ class SearchTelegram(Search):
 
         results_file = self.dataset.get_results_path()
         timestr = time.strftime("%Y%m%d_%H%M%S")
-        subfile_name = str(results_file.stem) + "-" + timestr + str(results_file.suffix)
+        subfile_name = str(self.dataset.get_initial_filepath().name) if initial_file else \
+            str(results_file.stem) + "-" + timestr + str(results_file.suffix)
+
         subfile_path = Path(str(results_file.parent) + "/" + subfile_name)
 
         if items:
@@ -1141,6 +1194,8 @@ class SearchTelegram(Search):
                     await self.save_to_google_drive(gdrive_client, subfile_path,  record, "text/csv")
             else:
                 raise NotImplementedError("Datasource query cannot be saved as %s file" % results_file.suffix)
+
+        self.update_latest_markers(items)
 
     async def save_to_zip_file(self):
         """
@@ -1191,3 +1246,20 @@ class SearchTelegram(Search):
                                        "with collection. " % (str(file_path.name)))
             self.log.error("Telegram: %s\n%s" % (str(e), traceback.format_exc()))
             return
+
+    def after_process(self):
+        """
+        Override of the same function in processor.py
+        Used to set the initial file to the main file
+        """
+        super().after_process()
+
+        # if there's an initial file, set this to the results file
+        initial_file = self.dataset.get_initial_filepath()
+
+        if initial_file.exists():
+            self.dataset.log("Found an initial file. Rewriting the results file to be this file.")
+            initial_file.rename(self.dataset.get_results_path())
+            self.dataset.remove_initial_record(initial_file.name)
+
+

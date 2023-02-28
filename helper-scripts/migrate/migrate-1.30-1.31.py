@@ -89,3 +89,14 @@ if config_path.exists():
     with open(config_path, 'w') as configfile:
         config_reader.write(configfile)
         print('Created config/config.ini file')
+
+# ---------------------------------------------
+# Adding update marker to datasets
+# ---------------------------------------------
+print("  Checking if dataset update marker column exists... ", end="")
+columns = [row["column_name"] for row in db.fetchall("SELECT column_name FROM information_schema.columns WHERE table_name = 'datasets'")]
+if "last_updated_markers" in columns:
+    print("yes!")
+else:
+    print("no. adding 'last_updated_markers' column to datasets table")
+    db.execute("ALTER TABLE datasets ADD COLUMN last_updated_markers TEXT DEFAULT ''")

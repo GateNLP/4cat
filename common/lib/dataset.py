@@ -124,7 +124,8 @@ class DataSet(FourcatModule):
 				"key_parent": parent,
 				"is_continuous": False,
 				"num_files": 0,
-				"drive_dir_id": ""
+				"drive_dir_id": "",
+				"last_updated_markers": ""
 			}
 			self.parameters = parameters
 
@@ -1325,6 +1326,50 @@ class DataSet(FourcatModule):
 			file_paths.append(self.folder.joinpath(subfile["file_path"]))
 
 		return file_paths
+
+	def get_initial_filepath(self):
+		"""
+		On continous collection, a file named 00initial is created in order to store the posts collected before
+		continuous collection begins. This is renamed at the end to be the results file
+
+		This function returns the original filename of this file
+		"""
+		results_file = self.get_results_path()
+		initial_file = results_file.with_name(str(results_file.stem) + "-00_initial" + str(results_file.suffix))
+		return initial_file
+
+	def remove_initial_record(self, path):
+		"""
+		When continuous collection is finished, this initial file should no longer exist as a subfile since it
+		is renamed to be the main results file
+
+		This removes record of this "initial" file from the subfiles linked to this dataset
+
+		:param path: the name of the file to remove
+		"""
+
+		self.db.delete("subfiles", where={"key": self.key, "file_path": path}, commit=True)
+
+	def update_last_update_markers(self, last_update):
+		"""
+		Stores the id of last saved post/message ids for each unique query in the dataset
+		This is so that should 4cat shut down in the middle of continuous collection, on restart, any missed messages
+		can be retrieved
+
+		:param last_update: a dict in the form {unique-query: latest-update-id,...}
+		"""
+		str_update = json.dumps(last_update)
+		self.data["last_updated_markers"] = str_update
+		self.db.update("datasets", where={"key": self.data["key"]}, data={"last_updated_markers": str_update})
+
+
+	def get_last_update_markers(self):
+		"""
+		Retrieves the list of last saved post/message ids for each unique query in the dataset
+		:return json: in the form {unique-query: latest-update-id,...}
+		"""
+		return json.loads(self.data["last_updated_markers"]) if self.data["last_updated_markers"] else None
+
 
 	def get_zip_path(self):
 		"""
