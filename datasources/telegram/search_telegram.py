@@ -283,6 +283,7 @@ class SearchTelegram(Search):
         if max_date:
             try:
                 max_date = datetime.fromtimestamp(int(max_date))
+                max_date = max_date.replace(hour=23, minute=59, second=59)
             except ValueError:
                 max_date = None
 
@@ -1094,7 +1095,7 @@ class SearchTelegram(Search):
                     self.interrupted = False
                     break
 
-                if datetime.now() > max_date:
+                if max_date and datetime.now() > max_date:
                     self.dataset.update_status("Stopping ongoing collection due to requested max date: %s"
                                                % str(max_date))
                     break
