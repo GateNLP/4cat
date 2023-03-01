@@ -549,10 +549,10 @@ class DataSet(FourcatModule):
 
 		# delete subfiles and zip file from drive
 		try:
-			self.db.delete("subfiles", where={"key": self.key}, commit=commit)
-
 			for file in self.get_subfile_paths():
 				file.unlink()
+
+			self.db.delete("subfiles", where={"key": self.key}, commit=commit)
 
 			self.get_zip_path().unlink()
 
