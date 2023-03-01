@@ -300,6 +300,9 @@ class SearchTelegram(Search):
             async for post in self.gather_posts(client, queries, max_items, min_date, max_date):
                 posts.append(post)
 
+            # update or initial posts come in reverse order.
+            # can be changed at client collection point, keeping it here for one useful and one workaround reason
+            posts.reverse()
             initial_file = False if self.dataset.get_last_update_markers() else True
             await self.save_files(posts, drive_client, initial_file=initial_file)
 
@@ -377,7 +380,7 @@ class SearchTelegram(Search):
                         markers = self.dataset.get_last_update_markers()
                         query = await client.get_peer_id(query)
 
-                        if query and markers[str(query)]:
+                        if query and str(query) in markers.keys():
                             min_id = markers[str(query)]
 
                     async for message in client.iter_messages(entity=query, offset_date=max_date, min_id=min_id):

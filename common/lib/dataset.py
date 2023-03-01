@@ -1366,6 +1366,10 @@ class DataSet(FourcatModule):
 	def get_last_update_markers(self):
 		"""
 		Retrieves the list of last saved post/message ids for each unique query in the dataset
+		If this exists, it means some data has already been collected for this dataset
+		Used for restarting continuous collectors in the event of app shutdown without recollecting
+		already existing/saved data
+
 		:return json: in the form {unique-query: latest-update-id,...}
 		"""
 		return json.loads(self.data["last_updated_markers"]) if self.data["last_updated_markers"] else None
