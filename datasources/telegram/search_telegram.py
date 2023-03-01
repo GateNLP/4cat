@@ -307,7 +307,8 @@ class SearchTelegram(Search):
                 self.dataset.mark_continuous()
                 cont_posts = await self.continuous_collection(client, queries, max_date, max_items, drive_client)
                 self.dataset.update_status("Stopping ongoing collection due to user request.")
-                posts = cont_posts
+                if len(cont_posts):
+                    posts = cont_posts
 
             return posts
 
