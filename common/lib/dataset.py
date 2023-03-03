@@ -11,6 +11,7 @@ import re
 
 import google
 import google.oauth2.credentials
+import httplib2
 from googleapiclient.discovery import build
 from pathlib import Path
 
@@ -21,7 +22,6 @@ from common.lib.helpers import get_software_version, NullAwareTextIOWrapper
 from common.lib.fourcat_module import FourcatModule
 from common.lib.exceptions import ProcessorInterruptedException
 from common.lib.subfile import Subfile
-
 
 class DataSet(FourcatModule):
 	"""
@@ -1415,7 +1415,9 @@ class DataSet(FourcatModule):
 			# get the owner fourcat folder. this should exist from initial login to google
 			user_data = self.db.fetchone("SELECT userdata FROM users WHERE name = \'%s\';" % self.get_owner())
 			user_data = json.loads(user_data["userdata"])
-			credentials = google.oauth2.credentials.Credentials(user_data["gdrive.accesstoken"])
+			credentials = self.get_owner_drive_credentials()
+
+
 			gdrive_client = build('drive', 'v3', credentials=credentials)
 
 			# specify the details for the folder you would like to create
@@ -1446,6 +1448,7 @@ class DataSet(FourcatModule):
 		credentials = None
 
 		try:
+
 			credentials = google.oauth2.credentials.Credentials(
 				user_data["gdrive.accesstoken"],
 				refresh_token=user_data["gdrive.refreshtoken"],
@@ -1456,6 +1459,9 @@ class DataSet(FourcatModule):
 
 		except KeyError:
 			self.update_status("Cannot find details to access google drive.")
+
+		if not credentials.valid:
+			credentials.refresh(httplib2.Http())
 
 		return credentials
 
