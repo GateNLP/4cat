@@ -400,12 +400,12 @@ class SearchTelegram(Search):
 
                         if retrieve_replies and (not reply_channel_added) and (message.replies and
                                                                                message.replies.channel_id):
-                            listed_reply_channel = message.replies.channel_id
+                            listed_reply_channel = str(message.replies.channel_id)
 
                             self.dataset.update_status("Reply channel '%s' found and added to process queue"
                                                        % listed_reply_channel)
 
-                            channel_to_add = utils.get_peer_id(types.PeerChannel(message.replies.channel_id))
+                            channel_to_add = utils.get_peer_id(message.replies.channel_id)
                             queries.append(channel_to_add)
                             reply_channel_added = True
 
@@ -1151,7 +1151,7 @@ class SearchTelegram(Search):
 
                 if record:
                     message_id = record["id"]
-                    channel_id = str(utils.get_peer_id(types.PeerChannel(channel)))
+                    channel_id = str(utils.get_peer_id(channel))
 
                     if channel_id in final_message_ids.keys():
                         final_message_ids.update({channel_id: message_id})
