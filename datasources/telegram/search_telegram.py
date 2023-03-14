@@ -554,6 +554,7 @@ class SearchTelegram(Search):
         # todo: not sure why this happens, quick fix for now
         if message["_chat"] is None:
             thread = "error-no-chat"
+            thread_num_id = "error-no-id"
         else:
             if message["_chat"]["username"]:
                 # chats can apparently not have usernames???
