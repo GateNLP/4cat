@@ -189,6 +189,29 @@ class TelegramImageDownloader(BasicProcessor):
             if amount and total_media >= amount:
                 break
 
+        # don't forget the subfiles!
+        if self.dataset.get_subfile_paths():
+            for path in self.source_dataset.get_subfile_paths():
+                for message in self.source_dataset.iterate_items(subfile=path):
+                    if self.interrupted:
+                        raise ProcessorInterruptedException("Interrupted while processing messages")
+
+                    if not message.get("attachment_data") or message.get("attachment_type") not in downloadable_types:
+                        continue
+
+                    # probably should make this backward compatible
+                    key_to_use = "thread_num_id" if "thread_num_id" in message.keys() else message["chat"]
+
+                    if message[key_to_use] not in messages_with_photos:
+                        messages_with_photos[message[key_to_use]] = []
+
+                    messages_with_photos[message[key_to_use]].append(int(message["id"]))
+                    total_media += 1
+
+                    if amount and total_media >= amount:
+                        break
+
+
         # now actually download the images
         # todo: investigate if we can directly instantiate a MessageMediaPhoto instead of fetching messages
         media_done = 1
@@ -243,6 +266,8 @@ class TelegramImageDownloader(BasicProcessor):
 
         if upload_to_drive:
             self.save_to_gdrive(drive_client, zip_file_count)
+
+        client.disconnect()
 
     @staticmethod
     def cancel_start():
