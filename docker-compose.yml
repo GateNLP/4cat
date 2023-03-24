@@ -14,7 +14,7 @@ services:
       - 4cat_db:/var/lib/postgresql/data/
 
   backend:
-    image: digitalmethodsinitiative/4cat:${DOCKER_TAG}
+    image: 4cat.docker.gate.ac.uk/4cat:${DOCKER_TAG}
     container_name: 4cat_backend
     init: true
     restart: unless-stopped
@@ -31,7 +31,7 @@ services:
     entrypoint: docker/docker-entrypoint.sh
 
   frontend:
-    image: digitalmethodsinitiative/4cat:${DOCKER_TAG}
+    image: 4cat.docker.gate.ac.uk/4cat:${DOCKER_TAG}
     container_name: 4cat_frontend
     restart: unless-stopped
     depends_on:
