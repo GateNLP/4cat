@@ -365,6 +365,10 @@ def queue_dataset():
 	sanitised_query["pseudonymise"] = bool(request.form.to_dict().get("pseudonymise", False))
 	is_private = bool(request.form.get("make-private", False))
 
+	# remove temporary code generated during telegram validation
+	if sanitised_query["session-code"]:
+		current_user.remove_value("temp_session_code")
+
 	extension = search_worker.extension if hasattr(search_worker, "extension") else "csv"
 	dataset = DataSet(
 		parameters=sanitised_query,
@@ -435,6 +439,12 @@ def check_dataset():
 		path = results.name
 		dataset_data = dataset.data
 		dataset_data["parameters"] = json.loads(dataset_data["parameters"])
+
+		# add this session to the set of potentially reusable telegram sessions since no longer in use
+		if dataset.parameters.get("session-code"):
+			current_codes = current_user.get_value("tg_codes", "")
+			if dataset.parameters.get("session-code") not in current_codes:
+				current_user.set_value("tg_codes", dataset.parameters.get("session-code") + "," + current_codes)
 	else:
 		path = ""
 

@@ -415,6 +415,15 @@ class User:
 
         return notifications
 
+    def get_telegram_jobs(self):
+        """
+        Get number telegram jobs being run by user
+
+        :return int: count: number of telegram jobs currently being run by this user
+        """
+        count = self.db.fetchone("SELECT COUNT(*) AS amount FROM datasets WHERE is_finished = False and type = 'telegram-search' and owner = '" + self.name + "'")["amount"]
+        return count
+
     #todo: maybe not the best determiner...
     def is_logged_into_drive(self):
         """

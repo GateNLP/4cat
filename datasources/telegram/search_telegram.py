@@ -9,6 +9,7 @@ import asyncio
 import json
 import time
 import re
+import uuid
 
 from pathlib import Path
 from googleapiclient.discovery import build
@@ -225,7 +226,12 @@ class SearchTelegram(Search):
         # order to avoid having to re-enter the security code
         query = self.parameters
 
+        session_code = query["session-code"]
         session_id = SearchTelegram.create_session_id(query["api_phone"], query["api_id"], query["api_hash"])
+
+        if session_code:
+            session_id = session_id + session_code
+
         self.dataset.log('Telegram session id: %s' % session_id)
         session_path = Path(config.get("PATH_ROOT")).joinpath(config.get("PATH_SESSIONS"), session_id + ".session")
 
@@ -865,7 +871,36 @@ class SearchTelegram(Search):
         # check for the information we need
         session_id = SearchTelegram.create_session_id(query.get("api_phone"), query.get("api_id"),
                                                       query.get("api_hash"))
+        session_code = None
+
         user.set_value("telegram.session", session_id)
+
+        # if there is more than one telegram collector running, should be ensured that only one session
+        # is used for each client. since each session requires auth (and setting up too many can easily
+        # get you rate limited), pick from previously set up but unused sessions ("tg_codes") where possible.
+        # otherwise create a new one. temp_code/temp_session_code" is used to ensure should a new session be
+        # created, its id is not overwritten when processing this form for the second time to validate the new session.
+
+        if user.get_telegram_jobs() > 0:
+            temp_code = user.get_value("temp_session_code", None)
+            old_codes = user.get_value("tg_codes", None)
+
+            if temp_code:
+                session_code = temp_code
+
+            elif old_codes:
+                usable_old_code = old_codes.split(",")[0]
+                updated_old_codes = old_codes.replace(usable_old_code + ",", "")
+                user.set_value("tg_codes", updated_old_codes)
+                session_code = usable_old_code
+                user.set_value("temp_session_code", session_code)
+
+            else:
+                session_code = uuid.uuid4().hex[0:4]
+                user.set_value("temp_session_code", session_code)
+
+            session_id = session_id + session_code
+
         session_path = Path(config.get('PATH_ROOT')).joinpath(config.get('PATH_SESSIONS'), session_id + ".session")
 
         client = None
@@ -951,7 +986,8 @@ class SearchTelegram(Search):
             "include-actions": query.get("include-actions"),
             "retrieve-replies": query.get("retrieve-replies"),
             "min_date": min_date,
-            "max_date": max_date
+            "max_date": max_date,
+            "session-code": session_code
         }
 
     @staticmethod
