@@ -412,6 +412,8 @@ class SearchTelegram(Search):
                                                        % listed_reply_channel)
 
                             channel_to_add = utils.get_peer_id(message.replies.channel_id)
+                            # making sure this is cached in the session file so it's actually found
+                            to_cache = await client.get_entity(channel_to_add)
                             queries.append(channel_to_add)
                             reply_channel_added = True
 
