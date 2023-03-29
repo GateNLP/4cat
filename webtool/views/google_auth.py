@@ -1,9 +1,12 @@
 import functools
+from urllib.parse import urlparse
+
 import flask
 import google.oauth2.credentials
 
 from authlib.integrations.requests_client import OAuth2Session
 from flask_login import current_user, login_required
+from flask import request
 from googleapiclient.discovery import build
 from webtool import app
 
@@ -42,6 +45,7 @@ def build_credentials():
 @login_required
 @no_cache
 def login_google():
+	flask.session["url_redirect"] = urlparse(request.referrer).path if request.referrer else "/"
 
 	# create session to handle oauth2 steps
 	session = OAuth2Session(config.get("GOOGLE_CLIENT_ID"),
@@ -98,7 +102,8 @@ def logout_google():
 	current_user.remove_value("gdrive.accesstoken")
 	current_user.remove_value("gdrive.refreshtoken")
 
-	return flask.redirect("/", code=302)
+	redirect_url = urlparse(request.referrer).path if request.referrer else "/"
+	return flask.redirect(redirect_url, code=302)
 
 
 @app.route('/google/create-fourcat-folder')
@@ -121,8 +126,7 @@ def create_fourcat_folder():
 		file_id = new_root_dir["id"]
 
 	current_user.set_value("gdrive.folderId", file_id)
-
-	return flask.redirect('/')
+	return flask.redirect(flask.session["url_redirect"] if flask.session["url_redirect"] else "/")
 
 
 def search_for_existing_folder(service, folder_name):
