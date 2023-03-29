@@ -733,6 +733,8 @@ class DataSet(FourcatModule):
 			if isinstance(label, list):
 				label = ", ".join(label)
 			label = label.strip().replace("\n", ", ")
+			# otherwise, there's a chance the names displayed aren't unique
+			label = label + "-" + self.key[0:4]
 			return label
 		elif parameters.get("country_flag") and parameters["country_flag"] != "all":
 			return "Flag: %s" % parameters["country_flag"]
