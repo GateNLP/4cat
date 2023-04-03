@@ -226,7 +226,7 @@ class SearchTelegram(Search):
         # order to avoid having to re-enter the security code
         query = self.parameters
 
-        session_code = query["session-code"]
+        session_code = query.get("sesson-code", None)
         session_id = SearchTelegram.create_session_id(query["api_phone"], query["api_id"], query["api_hash"])
 
         if session_code:

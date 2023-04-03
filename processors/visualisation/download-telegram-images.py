@@ -132,7 +132,7 @@ class TelegramImageDownloader(BasicProcessor):
         query = self.source_dataset.top_parent().parameters
         hash_base = query["api_phone"].replace("+", "") + query["api_id"] + query["api_hash"]
         session_id = hashlib.blake2b(hash_base.encode("ascii")).hexdigest()
-        session_code = query["session-code"]
+        session_code = query.get("session-code", None)
         session_id = session_id if not session_code else session_id + session_code
 
         session_path = Path(config.get('PATH_ROOT')).joinpath(config.get('PATH_SESSIONS'), session_id + ".session")
