@@ -9,7 +9,7 @@
         <ul>
             <li>
                 <i class="fa fa-file" aria-hidden="true"></i>
-                <em> {{ item.file_path.split("-")[2] }}</em>
+                <em> {{  item.file_path.split("-")[item.file_path.split("-")|length - 1] }}</em>
             </li>
             <li>
                 <a href="{{ url_for('get_result', query_file=item.file_path) }}">
