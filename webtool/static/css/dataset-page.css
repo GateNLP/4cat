@@ -121,7 +121,7 @@ article.result > section:first-child {
     padding: 0;
 }
 
-#dataset-result ul{
+#dataset-result ul {
     list-style: none;
     margin: 0;
     display: flex;
@@ -161,6 +161,24 @@ article.result > section:first-child {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
+}
+
+
+#dataset-result .result-status {
+    padding: 0.5em;
+}
+
+#dataset-result .result-row {
+    display: grid;
+    grid-template-columns: 3fr 1fr;
+}
+
+#dataset-result .result-row:not(:last-child) {
+    border-bottom: 1px solid var(--gray);
+}
+
+#dataset-result .result-log {
+    border-left: 1px solid var(--gray);
 }
 
 .query.card div.notice {

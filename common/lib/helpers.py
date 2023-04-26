@@ -86,7 +86,9 @@ def sniff_encoding(file):
     :param file:
     :return:
     """
-    if hasattr(file, "getbuffer"):
+    if type(file) == bytearray:
+        maybe_bom = file[:3]
+    elif hasattr(file, "getbuffer"):
         buffer = file.getbuffer()
         maybe_bom = buffer[:3].tobytes()
     elif hasattr(file, "peek"):
@@ -111,7 +113,7 @@ def get_software_version():
 
     :return str:  4CAT version
     """
-    versionpath = Path(config.get('PATH_ROOT'), config.get('path.versionfile'))
+    versionpath = config.get('PATH_ROOT').joinpath(config.get('path.versionfile'))
 
     if versionpath.exists() and not versionpath.is_file():
         return ""
