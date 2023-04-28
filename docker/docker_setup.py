@@ -23,19 +23,17 @@ def update_config_from_environment(CONFIG_FILE, config_parser):
 
     # Server information (Public Port can be updated via .env, but server name can also be update via frontend)
     config_parser['SERVER']['public_port'] = os.environ['PUBLIC_PORT']
-    config_parser['API']['api_port'] = os.environ['PUBLIC_API_PORT']
 
     # Set API
-    config_parser['API']['api_host'] = os.environ['PUBLIC_API_HOST']  # set in .env; should be backend container_name in docker-compose.py unless frontend and backend are running together in one container
-    config_parser['API']['api_port'] = os.environ['PUBLIC_API_PORT']
+    config_parser['API']['api_host'] = os.environ['API_HOST']  # set in .env; should be backend container_name in docker-compose.py unless frontend and backend are running together in one container
+    config_parser['API']['api_port'] = os.environ['API_PORT']
 
     # Database configuration
     config_parser['DATABASE']['db_name'] = os.environ['POSTGRES_DB']
     config_parser['DATABASE']['db_host'] = os.environ['POSTGRES_HOST']
     config_parser['DATABASE']['db_port'] = os.environ['DB_PORT']  # port exposed by postgres image
     config_parser['DATABASE']['db_user'] = os.environ['POSTGRES_USER']
-    config_parser['DATABASE']['db_password'] = os.environ['POSTGRES_PASSWORD']
-    config_parser['DATABASE']['db_host_auth'] = os.environ['POSTGRES_HOST_AUTH_METHOD']
+    config_parser['DATABASE']['db_password'] = os.environ['PGPASSWORD']
 
     # Google auth
     config_parser['GOOGLE']['client_id'] = os.environ['FN_CLIENT_ID']

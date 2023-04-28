@@ -34,14 +34,11 @@ COPY --from=compile-image /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt install -y \
-    # Called in docker-entrypoint.sh:
     curl \
     netcat \
     postgresql-client \
     postgresql-server-dev-all \
-    # Called by 4CAT:
     git \
-    # Needed for video processing only (and only technically on backend)
     ffmpeg
 
 # Set working directory
@@ -49,6 +46,8 @@ WORKDIR /usr/src/app
 
 # Copy project
 COPY . /usr/src/app/
+
+ENV PYTHONPATH /usr/src/app/
 
 # Permission
 RUN chmod +x docker/wait-for-backend.sh docker/docker-entrypoint.sh

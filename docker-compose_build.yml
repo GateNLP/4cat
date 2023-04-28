@@ -6,7 +6,7 @@ services:
     image: postgres:latest
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGPASSWORD=${PGPASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_HOST_AUTH_METHOD=${POSTGRES_HOST_AUTH_METHOD}
     volumes:
@@ -23,7 +23,7 @@ services:
     depends_on:
       - db
     ports:
-      - ${PUBLIC_API_PORT}:4444
+      - ${API_PORT}:4444
     volumes:
       - 4cat_data:/usr/src/app/data/
       - 4cat_share:/usr/src/app/config/
