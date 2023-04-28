@@ -464,6 +464,14 @@ class DataSet(FourcatModule):
 		except FileNotFoundError:
 			pass
 
+		for path in self.get_subfile_paths():
+			try:
+				path.unlink()
+			except FileNotFoundError:
+				pass
+
+		self.db.delete("subfiles", where={"key": self.key}, commit=True)
+
 		self.data["timestamp"] = int(time.time())
 		self.data["is_finished"] = False
 		self.data["num_rows"] = 0
