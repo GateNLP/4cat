@@ -31,7 +31,7 @@ def update_config_from_environment(CONFIG_FILE, config_parser):
     # Database configuration
     config_parser['DATABASE']['db_name'] = os.environ['POSTGRES_DB']
     config_parser['DATABASE']['db_host'] = os.environ['POSTGRES_HOST']
-    config_parser['DATABASE']['db_port'] = os.environ['DB_PORT']  # port exposed by postgres image
+    config_parser['DATABASE']['db_port'] = os.environ['POSTGRES_PORT']  # port exposed by postgres image
     config_parser['DATABASE']['db_user'] = os.environ['POSTGRES_USER']
     config_parser['DATABASE']['db_password'] = os.environ['PGPASSWORD']
 
