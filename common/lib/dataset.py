@@ -454,7 +454,8 @@ class DataSet(FourcatModule):
 
 	def unfinish(self):
 		"""
-		Declare unfinished, and reset status, so that it may be executed again.
+		Declare unfinished, delete files and subfiles, update last updated markers and reset status, so that it may be
+		executed again.
 		"""
 		if not self.is_finished():
 			raise RuntimeError("Cannot unfinish an unfinished dataset")
@@ -471,6 +472,9 @@ class DataSet(FourcatModule):
 				pass
 
 		self.db.delete("subfiles", where={"key": self.key}, commit=True)
+
+		self.data["last_updated_markers"] = ""
+		self.db.update("datasets", where={"key": self.data["key"]}, data={"last_updated_markers": ""})
 
 		self.data["timestamp"] = int(time.time())
 		self.data["is_finished"] = False

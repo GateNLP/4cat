@@ -378,10 +378,14 @@ class SearchTelegram(Search):
                     except ValueError:
                         pass
 
+                    # if 4cat goes down whilst a continuous collector is running, we don't want to get already saved
+                    # data on auto-restart once it comes back up
+                    # distinguished from a user driven restart, where all original data would be deleted so this would
+                    # not be necessary or useful. a user driven restart would have no last update markers
                     if self.dataset.is_continuous() and self.dataset.get_last_update_markers():
 
                         self.dataset.update_status("It looks like this is a continuous collector which has been "
-                                                   "restarted, so only retrieving missing posts since then.")
+                                                   "auto-restarted , so only retrieving missing posts since then.")
 
                         markers = self.dataset.get_last_update_markers()
                         query = await client.get_peer_id(query)
