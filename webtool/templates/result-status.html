@@ -19,13 +19,6 @@
 {% endif %}
 {% if dataset.get_status() %}
     {{ dataset.get_status() }}{% if dataset.get_status()[-1] != '.' %}.{% endif %}
-     {% if not dataset.is_finished() %}
-        <a href="{{ url_for('view_log', key=dataset.key) }}" data-load-from="{{ url_for('view_log', key=dataset.key) }}"
-            class="popup-trigger" aria-controls="popup-log-{{ dataset.key }}">
-            <i class="fa fa-clipboard-list"aria-hidden="true"></i> Log file
-        </a>
-    <div role="dialog" id="popup-log-{{ dataset.key }}"></div>
-    {% endif %}
 {% endif %}
 {% if dataset.is_finished() and dataset.num_rows > 0 %}
     {{ dataset.num_rows|commafy }} item{% if dataset.num_rows != 1 %}s{% endif %} captured.
