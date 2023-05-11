@@ -1,6 +1,7 @@
 """
 Search Telegram via API
 """
+import base64
 import functools
 import traceback
 import datetime
@@ -818,7 +819,7 @@ class SearchTelegram(Search):
                 # some type of internal telethon struct
                 continue
             elif type(value) is bytes:
-                mapped_obj[item] = value.hex()
+                mapped_obj[item] = base64.b64encode(value).encode("utf-8")
             elif type(value) not in scalars and value is not None:
                 # type we can't make sense of here
                 continue
