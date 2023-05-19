@@ -193,7 +193,7 @@ class TelegramImageDownloader(BasicProcessor):
                 break
 
         # don't forget the subfiles!
-        if self.dataset.get_subfile_paths():
+        if self.source_dataset.get_subfile_paths():
             for path in self.source_dataset.get_subfile_paths():
                 for message in self.source_dataset.iterate_items(subfile=path):
                     if self.interrupted:
