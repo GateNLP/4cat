@@ -34,24 +34,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS unique_job
 
 -- queries
 CREATE TABLE IF NOT EXISTS datasets (
-  id                SERIAL PRIMARY KEY,
-  key               text,
-  type              text DEFAULT 'search',
-  key_parent        text DEFAULT '',
-  owner             VARCHAR DEFAULT 'anonymous',
-  query             text,
-  job               integer DEFAULT 0,
-  parameters        text,
-  result_file       text DEFAULT '',
-  timestamp         integer,
-  status            text,
-  num_rows          integer DEFAULT 0,
-  progress          float DEFAULT 0.0,
-  is_finished       boolean DEFAULT FALSE,
-  is_private        boolean DEFAULT TRUE,
-  software_version  text,
-  software_file     text DEFAULT '',
-  annotation_fields text DEFAULT ''
+  id                   SERIAL PRIMARY KEY,
+  key                  text,
+  type                 text DEFAULT 'search',
+  key_parent           text DEFAULT '',
+  owner                VARCHAR DEFAULT 'anonymous',
+  query                text,
+  job                  integer DEFAULT 0,
+  parameters           text,
+  result_file          text DEFAULT '',
+  timestamp            integer,
+  status               text,
+  num_rows             integer DEFAULT 0,
+  progress             float DEFAULT 0.0,
+  is_finished          boolean DEFAULT FALSE,
+  is_private           boolean DEFAULT TRUE,
+  software_version     text,
+  software_file        text DEFAULT '',
+  annotation_fields    text DEFAULT '',
+  is_continuous        boolean DEFAULT FALSE,
+  num_files            integer DEFAULT 1,
+  drive_dir_id         text,
+  last_updated_markers text DEFAULT ''
+);
+
+-- subfiles
+CREATE TABLE IF NOT EXISTS subfiles (
+  id               SERIAL PRIMARY KEY,
+  key              text,
+  file_path        text,
+  file_type        text DEFAULT '',
+  saved_date       integer,
+  uploaded_date    integer,
+  owner            VARCHAR DEFAULT 'anonymous'
 );
 
 -- annotations
