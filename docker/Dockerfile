@@ -35,7 +35,7 @@ ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt install -y \
     curl \
-    netcat \
+    netcat-traditional \
     postgresql-client \
     postgresql-server-dev-all \
     git \

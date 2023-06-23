@@ -51,6 +51,7 @@ packages = [
 	"spacy==3.4.3",
 	"svgwrite~=1.4.0",
 	"Telethon~=1.25.2",
+	"typing_extensions<4.6.0",
 	"ural~=0.33",
 	"unidecode~=1.3",
 	"Werkzeug~=2.2",
@@ -59,6 +60,7 @@ packages = [
 	"PyDrive~=1.3.1",
 	"videohash==3.0.1",
 	"videohash @ https://github.com/dale-wahl/videohash/archive/refs/heads/main.zip",
+	"vk_api",
 	"en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.4.1/en_core_web_sm-3.4.1.tar.gz#egg=en_core_web_sm"
 ]
 

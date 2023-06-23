@@ -203,7 +203,12 @@ def import_ytdt_videolist(reader, columns, dataset, parameters):
     """
     # write to the result file
     for item in reader:
-        date = datetime.datetime.strptime(item["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")  # ex. 2022-11-11T05:30:01Z
+        try:
+            date = datetime.datetime.strptime(item["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")  # ex. 2022-11-11T05:30:01Z
+        except ValueError:
+            yield InvalidImportedItem(reason=f"Invalid date ({item['publishedAt']})")
+            continue
+
         collection_date = "_".join(dataset.parameters.get("filename").split("_")[2:]).replace(".csv", "")
 
         item = {
@@ -216,6 +221,7 @@ def import_ytdt_videolist(reader, columns, dataset, parameters):
             **item,
             "source_filename": dataset.parameters.get("filename"),
             "date_collected": collection_date,
+            "youtube_url": f"https://www.youtube.com/watch?v={item['videoId']}"
         }
 
         yield item
