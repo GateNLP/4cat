@@ -242,7 +242,7 @@ class SearchTelegram(Search):
                                     loop=self.eventloop)
             await client.start(phone=SearchTelegram.cancel_start)
         except RuntimeError:
-            # session is no longer useable, delete file so user will be asked
+            # session is no longer usable, delete file so user will be asked
             # for security code again. The RuntimeError is raised by
             # `cancel_start()`
             self.dataset.update_status(
@@ -424,7 +424,11 @@ class SearchTelegram(Search):
                         # todo: possibly enrich object with e.g. the name of
                         # the channel a message was forwarded from (but that
                         # needs extra API requests...)
+                        reply_message = await message.get_reply_message()
+
                         serialized_message = SearchTelegram.serialize_obj(message)
+                        serialized_message = SearchTelegram.enrich_object(serialized_message, "_reply_message", reply_message)
+
                         if resolve_refs:
                             serialized_message = await self.resolve_groups(client, serialized_message)
 
@@ -527,6 +531,7 @@ class SearchTelegram(Search):
                         self.details_cache[value["user_id"]] = SearchTelegram.serialize_obj(user)
 
                     resolved_message[key] = self.details_cache[value["user_id"]]
+
                 else:
                     resolved_message[key] = await self.resolve_groups(client, value)
 
@@ -780,6 +785,12 @@ class SearchTelegram(Search):
             }[media.get("_type", None)]
         except (AttributeError, KeyError):
             return ""
+
+    @staticmethod
+    def enrich_object(mapped_obj, new_key, new_value):
+        mapped_obj[new_key] = SearchTelegram.serialize_obj(new_value)
+
+        return mapped_obj
 
     @staticmethod
     def serialize_obj(input_obj):
