@@ -12,12 +12,12 @@ import os
 
 from pathlib import Path, PurePath
 
-import backend
-from backend.abstract.worker import BasicWorker
+from backend.lib.worker import BasicWorker
 from common.lib.dataset import DataSet
 from common.lib.fourcat_module import FourcatModule
 from common.lib.helpers import get_software_version, remove_nuls
 from common.lib.exceptions import WorkerInterruptedException, ProcessorInterruptedException, ProcessorException
+from common.config_manager import config, ConfigWrapper
 
 csv.field_size_limit(1024 * 1024 * 1024)
 
@@ -33,15 +33,14 @@ class BasicProcessor(FourcatModule, BasicWorker, metaclass=abc.ABCMeta):
 	useful is another question).
 
 	To determine whether a processor can process a given dataset, you can
-	define a `is_compatible_with(FourcatModule module=None):) -> bool` class
-	method which takes a dataset *or* processor as argument and returns a bool
-	that determines if this processor is considered compatible with that
-	dataset or processor. For example:
+	define a `is_compatible_with(FourcatModule module=None, str user=None):) -> bool` class
+	method which takes a dataset as argument and returns a bool that determines
+	if this processor is considered compatible with that dataset. For example:
 
 	.. code-block:: python
 
         @classmethod
-        def is_compatible_with(cls, module=None):
+        def is_compatible_with(cls, module=None, user=None):
             return module.type == "linguistic-features"
 
 
@@ -55,6 +54,9 @@ class BasicProcessor(FourcatModule, BasicWorker, metaclass=abc.ABCMeta):
 
 	#: The dataset object that the processor is *creating*.
 	dataset = None
+
+	#: Owner (username) of the dataset
+	owner = None
 
 	#: The dataset object that the processor is *processing*.
 	source_dataset = None
@@ -73,6 +75,9 @@ class BasicProcessor(FourcatModule, BasicWorker, metaclass=abc.ABCMeta):
 
 	#: Configurable options for this processor
 	options = {}
+
+	#: 4CAT settings from the perspective of the dataset's owner
+	config = None
 
 	#: Values for the processor's options, populated by user input
 	parameters = {}
@@ -93,12 +98,21 @@ class BasicProcessor(FourcatModule, BasicWorker, metaclass=abc.ABCMeta):
 		up.
 		"""
 		try:
+			# a dataset can have multiple owners, but the creator is the user
+			# that actually queued the processor, so their config is relevant
 			self.dataset = DataSet(key=self.job.data["remote_id"], db=self.db)
-		except TypeError:
+			self.owner = self.dataset.creator
+		except TypeError as e:
 			# query has been deleted in the meantime. finish without error,
 			# as deleting it will have been a conscious choice by a user
 			self.job.finish()
 			return
+
+		# set up config reader using the worker's DB connection and the dataset
+		# creator. This ensures that if a value has been overriden for the owner,
+		# the overridden value is used instead.
+		config.with_db(self.db)
+		self.config = ConfigWrapper(config=config, user=self.owner)
 
 		if self.dataset.data.get("key_parent", None):
 			# search workers never have parents (for now), so we don't need to
@@ -225,7 +239,7 @@ class BasicProcessor(FourcatModule, BasicWorker, metaclass=abc.ABCMeta):
 			next_parameters = next.get("parameters", {})
 			next_type = next.get("type", "")
 			try:
-				available_processors = self.dataset.get_available_processors()
+				available_processors = self.dataset.get_available_processors(user=self.dataset.creator)
 			except ValueError:
 				self.log.info("Trying to queue next processor, but parent dataset no longer exists, halting")
 				break
@@ -242,7 +256,7 @@ class BasicProcessor(FourcatModule, BasicWorker, metaclass=abc.ABCMeta):
 					parent=self.dataset.key,
 					extension=available_processors[next_type].extension,
 					is_private=self.dataset.is_private,
-					owner=self.dataset.owner
+					owner=self.dataset.creator
 				)
 				self.queue.add_job(next_type, remote_id=next_analysis.key)
 			else:
@@ -319,7 +333,7 @@ class BasicProcessor(FourcatModule, BasicWorker, metaclass=abc.ABCMeta):
 	def add_field_to_parent(self, field_name, new_data, which_parent=source_dataset, update_existing=False):
 		"""
 		This function adds a new field to the parent dataset. Expects a list of data points, one for each item
-		in the parent dataset. Processes csv and ndjson. If udpate_existing is set to True, this can be used
+		in the parent dataset. Processes csv and ndjson. If update_existing is set to True, this can be used
 		to overwrite an existing field.
 
 		TODO: could be improved by accepting different types of data depending on csv or ndjson.
@@ -650,45 +664,6 @@ class BasicProcessor(FourcatModule, BasicWorker, metaclass=abc.ABCMeta):
 		return cls.status if hasattr(cls, "status") else None
 
 	@classmethod
-	def get_available_processors(cls, self):
-		"""
-		Get list of processors compatible with this processor
-
-		Checks whether this dataset type is one that is listed as being accepted
-		by the processor, for each known type: if the processor does not
-		specify accepted types (via the `is_compatible_with` method), it is
-		assumed it accepts any top-level datasets
-
-		:return dict:  Compatible processors, `name => class` mapping
-		"""
-		processors = backend.all_modules.processors
-
-		available = []
-		for processor_type, processor in processors.items():
-			if processor_type.endswith("-search"):
-				continue
-
-			# consider a processor compatible if its is_compatible_with
-			# method returns True *or* if it has no explicit compatibility
-			# check and this dataset is top-level (i.e. has no parent)
-			if hasattr(processor, "is_compatible_with"):
-				if processor.is_compatible_with(module=self):
-					available.append(processor)
-
-		return available
-
-	@classmethod
-	def is_dataset(cls):
-		"""
-		Confirm this is *not* a dataset, but a processor.
-
-		Used for processor compatibility checks.
-
-		:return bool:  Always `False`, because this is a processor.
-		"""
-		return False
-
-	@classmethod
 	def is_top_dataset(cls):
 		"""
 		Confirm this is *not* a top dataset, but a processor.
@@ -761,3 +736,5 @@ class BasicProcessor(FourcatModule, BasicWorker, metaclass=abc.ABCMeta):
 		To be defined by the child processor.
 		"""
 		pass
+
+

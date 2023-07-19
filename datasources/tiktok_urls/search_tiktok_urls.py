@@ -13,12 +13,11 @@ import re
 from requests_futures.sessions import FuturesSession
 from bs4 import BeautifulSoup
 
-import common.config_manager as config
-from backend.abstract.search import Search
+from backend.lib.search import Search
 from common.lib.helpers import UserInput
-from common.lib.exceptions import WorkerInterruptedException, QueryParametersException, ProcessorInterruptedException, ProcessorException
+from common.lib.exceptions import WorkerInterruptedException, QueryParametersException, ProcessorException
 from datasources.tiktok.search_tiktok import SearchTikTok as SearchTikTokByImport
-
+from common.config_manager import config
 
 class SearchTikTokByID(Search):
     """
@@ -26,8 +25,8 @@ class SearchTikTokByID(Search):
     """
     type = "tiktok-urls-search"  # job ID
     category = "Search"  # category
-    title = "Search TikTok by video URL"  # title displayed in UI
-    description = "Retrieve metadata for TikTok video URLs."  # description displayed in UI
+    title = "Search TikTok by post URL"  # title displayed in UI
+    description = "Retrieve metadata for TikTok post URLs."  # description displayed in UI
     extension = "ndjson"  # extension of result file, used internally and in UI
     is_local = False  # Whether this datasource is locally scraped
     is_static = False  # Whether this datasource is still updated
@@ -36,15 +35,15 @@ class SearchTikTokByID(Search):
     accepts = [None]
 
     config = {
-        "tiktok-urls.proxies": {
+        "tiktok-urls-search.proxies": {
             "type": UserInput.OPTION_TEXT_JSON,
             "default": [],
             "help": "Proxies for TikTok data collection"
         },
-        "tiktok-urls.proxies.wait": {
+        "tiktok-urls-search.proxies.wait": {
             "type": UserInput.OPTION_TEXT,
             "coerce_type": float,
-            "default": 1,
+            "default": 1.0,
             "help": "Request wait",
             "tooltip": "Time to wait before sending a new request from the same IP"
         }
@@ -53,16 +52,16 @@ class SearchTikTokByID(Search):
     options = {
         "intro": {
             "type": UserInput.OPTION_INFO,
-            "help": "This data source can retrieve metadata for TikTok videos based on a list of URLs for those "
-                    "videos.\n\nEnter a list of TikTok video URLs. Metadata for each video will be extracted from "
-                    "each video's page in the browser interface "
+            "help": "This data source can retrieve metadata for TikTok posts based on a list of URLs for those "
+                    "posts.\n\nEnter a list of TikTok post URLs. Metadata for each post will be extracted from "
+                    "each post's page in the browser interface "
                     "([example](https://www.tiktok.com/@willsmith/video/7079929224945093934)). This includes a lot of "
-                    "details about the post itself as well as the first 20 comments on the video. The comments and "
-                    "much of the metadata is only directly available when downloading the results as an .ndjson file."
+                    "details about the post itself such as likes, tags and stickers. Note that some of the metadata is "
+                    "only directly available when downloading the results as an .ndjson file."
         },
         "urls": {
             "type": UserInput.OPTION_TEXT_LARGE,
-            "help": "Video URLs",
+            "help": "Post URLs",
             "tooltip": "Separate by commas or new lines."
         }
     }
@@ -73,7 +72,7 @@ class SearchTikTokByID(Search):
 
         :param dict query:  Search query parameters
         """
-        tiktok_scraper = TikTokScraper(processor=self)
+        tiktok_scraper = TikTokScraper(processor=self, config=self.config)
         loop = asyncio.new_event_loop()
         return loop.run_until_complete(tiktok_scraper.request_metadata(query["urls"].split(",")))
 
@@ -144,7 +143,7 @@ class TikTokScraper:
     last_time_proxy_available = None
     no_available_proxy_timeout = 600
 
-    def __init__(self, processor):
+    def __init__(self, processor, config):
         """
         :param Processor processor:  The processor using this function and needing updates
         """
@@ -156,8 +155,8 @@ class TikTokScraper:
 
         :return:
         """
-        all_proxies = config.get("tiktok-urls.proxies")
-        self.proxy_sleep = config.get("tiktok-urls.proxies.wait", self.proxy_sleep)
+        all_proxies = self.processor.config.get("tiktok-urls-search.proxies")
+        self.proxy_sleep = self.processor.config.get("tiktok-urls-search.proxies.wait", self.proxy_sleep)
         if not all_proxies:
             # no proxies? just request directly
             all_proxies = ["__localhost__"]
@@ -363,10 +362,18 @@ class TikTokScraper:
                     continue
 
                 for video in self.reformat_metadata(metadata):
+                    if not video.get("stats") or video.get("createTime") == "0":
+                        # sometimes there are empty videos? which seems to
+                        # indicate a login wall
+                        self.processor.dataset.log(
+                            f"Empty metadata returned for video {url} ({video['id']}), skipping. This likely means that the post requires logging in to view.")
+                        continue
+                    else:
+                        results.append(video)
+
                     self.processor.dataset.update_status("Processed %s of %s TikTok URLs" %
                                                ("{:,}".format(finished), "{:,}".format(num_urls)))
                     self.processor.dataset.update_progress(finished / num_urls)
-                    results.append(video)
 
         notes = []
         if failed:

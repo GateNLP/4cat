@@ -9,9 +9,9 @@ import csv
 from pathlib import Path
 from abc import ABC, abstractmethod
 
-import common.config_manager as config
+from common.config_manager import config
 from common.lib.dataset import DataSet
-from backend.abstract.processor import BasicProcessor
+from backend.lib.processor import BasicProcessor
 from common.lib.helpers import strip_tags, dict_search_and_update, remove_nuls, HashCache
 from common.lib.exceptions import WorkerInterruptedException, ProcessorInterruptedException
 
@@ -94,7 +94,7 @@ class Search(BasicProcessor, ABC):
 			for next in query_parameters.get("next"):
 				next_parameters = next.get("parameters", {})
 				next_type = next.get("type", "")
-				available_processors = self.dataset.get_available_processors()
+				available_processors = self.dataset.get_available_processors(user=self.dataset.creator)
 
 				# run it only if the processor is actually available for this query
 				if next_type in available_processors:
@@ -176,7 +176,7 @@ class Search(BasicProcessor, ABC):
 		if not path.exists():
 			return []
 
-		with path.open() as infile:
+		with path.open(encoding="utf-8") as infile:
 			for line in infile:
 				if self.interrupted:
 					raise WorkerInterruptedException()
@@ -191,6 +191,7 @@ class Search(BasicProcessor, ABC):
 				}
 
 		path.unlink()
+		self.dataset.delete_parameter("file")
 
 	def items_to_csv(self, results, filepath):
 		"""

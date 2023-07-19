@@ -97,12 +97,16 @@ if __name__ == "__main__":
             config_parser.write(configfile)
             print('Created config/config.ini file')
         # Write environment variables to database
-        # Must write prior to import common.config_manager as config
+        # Must write prior to importing config (where the values are read)
         update_config_from_environment(CONFIG_FILE, config_parser)
         print('Created config/config.ini file')
 
         # Ensure filepaths exist
-        import common.config_manager as config
+        from common.config_manager import config
+        from common.lib.database import Database
+        config.with_db(Database(logger=None, appname="docker-setup",
+				  dbname=config.DB_NAME, user=config.DB_USER, password=config.DB_PASSWORD, host=config.DB_HOST, port=config.DB_PORT))
+
         for path in [config.get('PATH_DATA'),
                      config.get('PATH_IMAGES'),
                      config.get('PATH_LOGS'),
@@ -118,12 +122,12 @@ if __name__ == "__main__":
         frontend_servername = os.environ['SERVER_NAME']
         public_port = int(config_parser['SERVER']['public_port'])
         if public_port == 80:
-            config.set_or_create_setting('flask.server_name', frontend_servername, raw=False)
+            config.set('flask.server_name', frontend_servername)
         elif int(public_port) == 443:
-            config.set_or_create_setting('flask.server_name', frontend_servername, raw=False)
-            config.set_or_create_setting('flask.https', "true", raw=False)
+            config.set('flask.server_name', frontend_servername)
+            config.set('flask.https', "true")
         else:
-            config.set_or_create_setting('flask.server_name', f"{frontend_servername}:{public_port}", raw=False)
+            config.set('flask.server_name', f"{frontend_servername}:{public_port}")
 
     # Config file already exists; Update .env variables if they changed
     else:
@@ -133,7 +137,7 @@ if __name__ == "__main__":
         config_parser.read(CONFIG_FILE)
 
         # Write environment variables to database
-        # Must write prior to import common.config_manager as config
+        # Must write prior to importing config (which reads these values)
         update_config_from_environment(CONFIG_FILE, config_parser)
         config_parser['DATABASE']['db_name'] = os.environ['POSTGRES_DB']
         config_parser['DATABASE']['db_user'] = os.environ['POSTGRES_USER']
@@ -142,16 +146,16 @@ if __name__ == "__main__":
         public_port = os.environ['PUBLIC_PORT']
         config_parser['SERVER']['public_port'] = str(public_port)
 
-        # Check to see if flask.server_name needs to be updated
         config_parser['GOOGLE']['client_id'] = os.environ['FN_CLIENT_ID']
         config_parser['GOOGLE']['client_secret'] = os.environ['FN_CLIENT_SECRET']
         config_parser['GOOGLE']['auth_redirect_uri'] = os.environ['FN_AUTH_REDIRECT_URI']
 
-        # Save config file
-        with open(CONFIG_FILE, 'w') as configfile:
-            config_parser.write(configfile)
+        # Check to see if flask.server_name needs to be updated
+        from common.config_manager import config
+        from common.lib.database import Database
+        config.with_db(Database(logger=None, appname="docker-setup",
+				  dbname=config.DB_NAME, user=config.DB_USER, password=config.DB_PASSWORD, host=config.DB_HOST, port=config.DB_PORT))
 
-        import common.config_manager as config
         public_port = int(config_parser['SERVER']['public_port'])
         frontend_port = int(config.get('flask.server_name').split(":")[-1]) if ":" in config.get('flask.server_name') else 80
         frontend_servername = config.get('flask.server_name').split(":")[0]
@@ -159,14 +163,14 @@ if __name__ == "__main__":
         if frontend_port != public_port:
             if public_port == 80:
                 # Set flask.server to existing frontend_servername with no port
-                config.set_or_create_setting('flask.server_name', f"{frontend_servername}", raw=False)
+                config.set('flask.server_name', f"{frontend_servername}")
                 print(f"Updated flask.server_name: {frontend_servername}")
             elif int(public_port) == 443:
                 config.set_or_create_setting('flask.server_name', frontend_servername, raw=False)
                 config.set_or_create_setting('flask.https', "true", raw=False)
             else:
                 # Set flask.server to existing frontend_servername with the new public_port
-                config.set_or_create_setting('flask.server_name', f"{frontend_servername}:{public_port}", raw=False)
+                config.set('flask.server_name', f"{frontend_servername}:{public_port}")
                 print(f"Updated flask.server_name with new public port: {frontend_servername}:{public_port}")
 
     print(f"\nStarting app\n"

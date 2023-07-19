@@ -44,6 +44,9 @@ fi
 # If backend did gracefully shutdown, PID lockfile remains; Remove lockfile
 rm -f ./backend/4cat.pid
 
+# add working directory to python path
+export PYTHONPATH=/usr/src/app:$PYTHONPATH
+
 # Run migrate prior to setup (old builds pre 1.26 may not have config_manager)
 python3 helper-scripts/migrate.py -y
 
@@ -54,4 +57,5 @@ python3 -m docker.docker_setup
 python3 4cat-daemon.py start
 
 # Tail logs and wait for SIGTERM
+sleep 1  # give the logger time to initialise
 exec tail -f -n 3 logs/backend_4cat.log & wait $!

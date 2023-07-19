@@ -14,9 +14,9 @@ from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize, TweetTokenizer, sent_tokenize
 
 from common.lib.helpers import UserInput, get_interval_descriptor
-from backend.abstract.processor import BasicProcessor
+from backend.lib.processor import BasicProcessor
+from common.config_manager import config
 
-import common.config_manager as config
 __author__ = ["Stijn Peeters", "Sal Hagen"]
 __credits__ = ["Stijn Peeters", "Sal Hagen"]
 __maintainer__ = ["Stijn Peeters", "Sal Hagen"]
@@ -44,7 +44,7 @@ class Tokenise(BasicProcessor):
 	]
 
 	@classmethod
-	def is_compatible_with(cls, module=None):
+	def is_compatible_with(cls, module=None, user=None):
 		"""
 		Allow CSV and NDJSON datasets
 		"""
@@ -70,8 +70,7 @@ class Tokenise(BasicProcessor):
 			"columns": {
 				"type": UserInput.OPTION_TEXT,
 				"help": "Column(s) to tokenise",
-				"default": "body",
-				"tooltip": "Each enabled column will be treated as a separate item to tokenise."
+				"tooltip": "Each enabled column will be treated as a separate item to tokenise. Columns must contain text."
 			},
 			"docs_per": {
 				"type": UserInput.OPTION_CHOICE,
@@ -169,7 +168,9 @@ class Tokenise(BasicProcessor):
 			options["columns"]["type"] = UserInput.OPTION_MULTI
 			options["columns"]["inline"] = True
 			options["columns"]["options"] = {v: v for v in columns}
-			options["columns"]["default"] = ["body"]
+			default_options = [default for default in ["body", "text", "subject"] if default in columns]
+			if default_options:
+				options["columns"]["default"] = default_options.pop()
 
 		return options
 
@@ -205,6 +206,11 @@ class Tokenise(BasicProcessor):
 		The result is valid JSON, written in chunks.
 		"""
 		columns = self.parameters.get("columns")
+		if not columns:
+			self.dataset.update_status("No columns selected, aborting.", is_final=True)
+			self.dataset.update_status(0)
+			return
+
 		if type(columns) is not list:
 			columns = [columns]
 

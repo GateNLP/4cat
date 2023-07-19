@@ -5,7 +5,7 @@ import csv
 from nltk.tokenize import sent_tokenize, word_tokenize
 
 from common.lib.helpers import UserInput
-from backend.abstract.processor import BasicProcessor
+from backend.lib.processor import BasicProcessor
 
 __author__ = "Stijn Peeters"
 __credits__ = ["Stijn Peeters"]
@@ -82,7 +82,7 @@ class SplitSentences(BasicProcessor):
 		return options
 
 	@classmethod
-	def is_compatible_with(cls, module=None):
+	def is_compatible_with(cls, module=None, user=None):
 		"""
 		Allow CSV and NDJSON datasets
 		"""
