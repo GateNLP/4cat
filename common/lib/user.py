@@ -509,7 +509,7 @@ class User:
 
         :return int: count: number of telegram jobs currently being run by this user
         """
-        count = self.db.fetchone("SELECT COUNT(*) AS amount FROM datasets WHERE is_finished = False and type = 'telegram-search' and owner = '" + self.name + "'")["amount"]
+        count = self.db.fetchone("SELECT COUNT(*) AS amount FROM datasets WHERE is_finished = False and type = 'telegram-search' and creator = '" + self.name + "'")["amount"]
         return count
 
     #todo: maybe not the best determiner...
@@ -578,7 +578,7 @@ class User:
 
         :return int: count: number of telegram jobs currently being run by this user
         """
-        count = self.db.fetchone("SELECT COUNT(*) AS amount FROM datasets WHERE is_finished = False and type = 'telegram-search' and owner = '" + self.name + "'")["amount"]
+        count = self.db.fetchone("SELECT COUNT(*) AS amount FROM datasets WHERE is_finished = False and type = 'telegram-search' and creator = '" + self.name + "'")["amount"]
         return count
 
     #todo: maybe not the best determiner...

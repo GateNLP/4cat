@@ -201,7 +201,7 @@ class DataSet(FourcatModule):
 
 		:return Path:  A string listing the owner of this dataset
 		"""
-		return self.data["owner"]
+		return self.data["creator"]
 
 	def clear_log(self):
 		"""
