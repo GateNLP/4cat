@@ -337,3 +337,22 @@ class TelegramImageDownloader(BasicProcessor):
         except Exception as e:
             self.dataset.update_status("Failed to write zip file %i to google drive" % zip_file_count)
             self.dataset.update_status("Error is %s" % str(e))
+
+
+    @staticmethod
+    def map_metadata(filename, data):
+        """
+        Iterator to yield modified metadata for CSV
+
+        :param str url:  string that may contain URLs
+        :param dict data:  dictionary with metadata collected previously
+        :yield dict:  	  iterator containing reformated metadata
+        """
+        row = {
+            "number_of_posts_with_image": len(data.get("post_ids", [])),
+            "post_ids": ", ".join(data.get("post_ids", [])),
+            "filename": filename,
+            "download_successful": data.get('success', "")
+        }
+
+        yield row
