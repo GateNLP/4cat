@@ -166,8 +166,8 @@ if __name__ == "__main__":
                 config.set('flask.server_name', f"{frontend_servername}")
                 print(f"Updated flask.server_name: {frontend_servername}")
             elif int(public_port) == 443:
-                config.set_or_create_setting('flask.server_name', frontend_servername, raw=False)
-                config.set_or_create_setting('flask.https', "true", raw=False)
+                config.set('flask.server_name', frontend_servername)
+                config.set('flask.https', "true")
             else:
                 # Set flask.server to existing frontend_servername with the new public_port
                 config.set('flask.server_name', f"{frontend_servername}:{public_port}")
