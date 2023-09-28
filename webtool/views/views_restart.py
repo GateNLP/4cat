@@ -27,7 +27,7 @@ from webtool.lib.helpers import setting_required, check_restart_request
 from common.lib.helpers import get_github_version
 
 from common.config_manager import ConfigWrapper
-config = ConfigWrapper(config, user=current_user)
+config = ConfigWrapper(config, user=current_user, request=request)
 
 @app.route("/admin/trigger-restart/", methods=["POST", "GET"])
 @login_required
@@ -54,7 +54,7 @@ def trigger_restart():
 
     code_version = Path(config.get("PATH_ROOT"), "VERSION").open().readline().strip()
     try:
-        github_version = get_github_version()
+        github_version = get_github_version(timeout=5)
         release_notes = github_version[1]
         github_version = github_version[0]
     except (json.JSONDecodeError, requests.RequestException):

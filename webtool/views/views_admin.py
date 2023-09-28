@@ -33,7 +33,7 @@ import common.lib.config_definition as config_definition
 
 from common.config_manager import ConfigWrapper
 
-config = ConfigWrapper(config, user=current_user)
+config = ConfigWrapper(config, user=current_user, request=request)
 
 
 @app.route("/admin/")
@@ -49,10 +49,10 @@ def admin_frontpage():
     # collect some stats
     now = time.time()
     num_items = {
-        "day": db.fetchone("SELECT SUM(num_rows) AS num FROM datasets WHERE timestamp > %s AND key_parent = '' AND (type LIKE '%-search' OR type LIKE '%-import')", (now - 86400,))["num"],
-        "week": db.fetchone("SELECT SUM(num_rows) AS num FROM datasets WHERE timestamp > %s AND key_parent = '' AND (type LIKE '%-search' OR type LIKE '%-import')", (now - (86400 * 7),))[
+        "day": db.fetchone("SELECT SUM(num_rows) AS num FROM datasets WHERE timestamp > %s AND key_parent = '' AND (type LIKE '%%-search' OR type LIKE '%%-import')", (now - 86400,))["num"],
+        "week": db.fetchone("SELECT SUM(num_rows) AS num FROM datasets WHERE timestamp > %s AND key_parent = '' AND (type LIKE '%%-search' OR type LIKE '%%-import')", (now - (86400 * 7),))[
             "num"],
-        "overall": db.fetchone("SELECT SUM(num_rows) AS num FROM datasets AND key_parent = '' AND (type LIKE '%-search' OR type LIKE '%-import')")["num"]
+        "overall": db.fetchone("SELECT SUM(num_rows) AS num FROM datasets WHERE key_parent = '' AND (type LIKE '%%-search' OR type LIKE '%%-import')")["num"]
     }
 
     num_datasets = {
@@ -70,9 +70,10 @@ def admin_frontpage():
     upgrade_available = not not db.fetchone(
         "SELECT * FROM users_notifications WHERE username = '!admins' AND notification LIKE 'A new version of 4CAT%'")
 
+    tags = config.get_active_tags(current_user)
     return render_template("controlpanel/frontpage.html", flashes=get_flashed_messages(), stats={
         "captured": num_items, "datasets": num_datasets, "disk": disk_stats
-    }, upgrade_available=upgrade_available)
+    }, upgrade_available=upgrade_available, tags=tags)
 
 
 @app.route("/admin/users/", defaults={"page": 1})
@@ -215,7 +216,7 @@ def add_user():
     if fmt == "html":
         if redirect_to_page:
             flash(response["message"])
-            return redirect(url_for("manipulate_user", values={"name": username}))
+            return redirect(url_for("manipulate_user", mode="edit", name=username))
         else:
             return render_template("error.html", message=response["message"],
                                    title=("New account created" if response["success"] else "Error"))
@@ -416,7 +417,10 @@ def manipulate_tags():
 
     # explicit tags are already ordered; implicit tags have not been given a
     # place in the order yet, but are used for at least one user
-    all_tags = set.union(*[set(user["tags"]) for user in db.fetchall("SELECT tags FROM users")])
+    all_tags = set.union(
+        *[set(user["tags"]) for user in db.fetchall("SELECT tags FROM users")],
+        set([setting["tag"] for setting in db.fetchall("SELECT DISTINCT tag FROM settings") if setting["tag"]]))
+
     tags = [{"tag": tag, "explicit": True} for tag in tag_priority]
     tags.extend([{"tag": tag, "explicit": False} for tag in all_tags if tag not in tag_priority])
 
@@ -492,7 +496,7 @@ def manipulate_settings():
         try:
             # this gives us the parsed values, as Python variables, i.e. before
             # potentially encoding them as JSON
-            new_settings = UserInput.parse_all(definition, request.form.to_dict(),
+            new_settings = UserInput.parse_all(definition, request.form,
                                                silently_correct=False)
 
             for setting, value in new_settings.items():

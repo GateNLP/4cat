@@ -1,5 +1,5 @@
-import json
 import pickle
+import json
 
 from pathlib import Path
 from common.lib.database import Database
@@ -129,6 +129,7 @@ class ConfigManager:
         unknown_keys = self.db.fetchall("SELECT DISTINCT name FROM settings WHERE name NOT IN %s", (known_keys,))
 
         if unknown_keys:
+            self.db.log.info(f"Deleting unknown settings from database: {', '.join([key['name'] for key in unknown_keys])}")
             self.db.delete("settings", where={"name": tuple([key["name"] for key in unknown_keys])}, commit=False)
 
         self.db.commit()
@@ -196,31 +197,8 @@ class ConfigManager:
         if not self.db:
             self.with_db()
 
-        # be flexible about the input types here
-        if tags is None:
-            tags = []
-        elif type(tags) is str:
-            tags = [tags]
-
-        # can provide either a string or user object
-        if type(user) is not str:
-            if hasattr(user, "get_id"):
-                user = user.get_id()
-            elif user is not None:
-                raise TypeError("get() expects None, a User object or a string for argument 'user'")
-
-        # user-specific settings are just a special type of tag (which takes
-        # precedence), same goes for user groups
-        if user:
-            user_tags = self.db.fetchone("SELECT tags FROM users WHERE name = %s", (user,))
-            if user_tags:
-                try:
-                    tags.extend(user_tags["tags"])
-                except (TypeError, ValueError):
-                    # should be a JSON list, but isn't
-                    pass
-
-            tags.insert(0, f"user:{user}")
+        # get tags to look for
+        tags = self.get_active_tags(user, tags)
 
         # query database for any values within the required tags
         tags.append("")  # empty tag = default value
@@ -268,6 +246,49 @@ class ConfigManager:
             return list(final_settings.values())[0]
         else:
             return final_settings
+
+    def get_active_tags(self, user=None, tags=None):
+        """
+        Get active tags for given user/tag list
+
+        Used internally to harmonize tag setting for various methods, but can
+        also be called directly to verify tag activation.
+
+        :param user:  User object or name. Adds a tag `user:[username]` in
+        front of the tag list.
+        :param tags:  Tag or tags for the required setting. If a tag is
+        provided, the method checks if a special value for the setting exists
+        with the given tag, and returns that if one exists. First matching tag
+        wins.
+        :return list:  List of tags
+        """
+        # be flexible about the input types here
+        if tags is None:
+            tags = []
+        elif type(tags) is str:
+            tags = [tags]
+
+        # can provide either a string or user object
+        if type(user) is not str:
+            if hasattr(user, "get_id"):
+                user = user.get_id()
+            elif user is not None:
+                raise TypeError("get() expects None, a User object or a string for argument 'user'")
+
+        # user-specific settings are just a special type of tag (which takes
+        # precedence), same goes for user groups
+        if user:
+            user_tags = self.db.fetchone("SELECT tags FROM users WHERE name = %s", (user,))
+            if user_tags:
+                try:
+                    tags.extend(user_tags["tags"])
+                except (TypeError, ValueError):
+                    # should be a JSON list, but isn't
+                    pass
+
+            tags.insert(0, f"user:{user}")
+
+        return tags
 
     def set(self, attribute_name, value, is_json=False, tag="", overwrite_existing=True):
         """
@@ -345,19 +366,26 @@ class ConfigWrapper:
     Wrapper for the config manager
 
     Allows setting a default set of tags or user, so that all subsequent calls
-    to `get()` are done for those tags or that user.
+    to `get()` are done for those tags or that user. Can also adjust tags based
+    on the HTTP request, if used in a Flask context.
     """
-    def __init__(self, config, user=None, tags=None):
+    def __init__(self, config, user=None, tags=None, request=None):
         """
         Initialise config wrapper
 
         :param ConfigManager config:  Initialised config manager
         :param user:  User to get settings for
         :param tags:  Tags to get settings for
+        :param request:  Request to get headers from. This can be used to set
+        a particular tag based on the HTTP headers of the request, e.g. to
+        serve 4CAT with a different configuration based on the proxy server
+        used.
         """
         self.config = config
         self.user = user
         self.tags = tags
+        self.request = request
+
 
     def set(self, *args, **kwargs):
         """
@@ -377,6 +405,10 @@ class ConfigWrapper:
         """
         Wrap `get_all()`
 
+        Takes the `user`, `tags` and `request` given when initialised into
+        account. If `tags` is set explicitly, the HTTP header-based override
+        is not applied.
+
         :param args:
         :param kwargs:
         :return:
@@ -384,14 +416,19 @@ class ConfigWrapper:
         if "user" not in kwargs and self.user:
             kwargs["user"] = self.user
 
-        if "tags" not in kwargs and self.tags:
-            kwargs["tags"] = self.tags
+        if "tags" not in kwargs:
+            kwargs["tags"] = self.tags if self.tags else []
+            kwargs["tags"] = self.request_override(kwargs["tags"])
 
         return self.config.get_all(*args, **kwargs)
 
     def get(self, *args, **kwargs):
         """
         Wrap `get()`
+
+        Takes the `user`, `tags` and `request` given when initialised into
+        account. If `tags` is set explicitly, the HTTP header-based override
+        is not applied.
 
         :param args:
         :param kwargs:
@@ -401,9 +438,63 @@ class ConfigWrapper:
             kwargs["user"] = self.user
 
         if "tags" not in kwargs:
-            kwargs["tags"] = self.tags
+            kwargs["tags"] = self.tags if self.tags else []
+            kwargs["tags"] = self.request_override(kwargs["tags"])
 
         return self.config.get(*args, **kwargs)
+
+    def get_active_tags(self, user=None, tags=None):
+        """
+        Wrap `get_active_tags()`
+
+        Takes the `user`, `tags` and `request` given when initialised into
+        account. If `tags` is set explicitly, the HTTP header-based override
+        is not applied.
+
+        :param user:
+        :param tags:
+        :return list:
+        """
+        active_tags = self.config.get_active_tags(user, tags)
+        if not tags:
+            active_tags = self.request_override(active_tags)
+
+        return active_tags
+
+    def request_override(self, tags):
+        """
+        Force tag via HTTP request headers
+
+        To facilitate loading different configurations based on the HTTP
+        request, the request object can be passed to the ConfigWrapper and
+        if a certain request header is set, the value of that header will be
+        added to the list of tags to consider when retrieving settings.
+
+        See the flask.proxy_secret config setting; this is used to prevent
+        users from changing configuration by forging the header.
+
+        :param list|str tags:  List of tags to extend based on request
+        :return list:  Amended list of tags
+        """
+        if type(tags) is str:
+            tags = [tags]
+
+        if self.request and self.request.headers.get("X-4Cat-Config-Tag") and \
+            self.config.get("flask.proxy_secret") and \
+            self.request.headers.get("X-4Cat-Config-Via-Proxy") == self.config.get("flask.proxy_secret"):
+            # need to ensure not just anyone can add this header to their
+            # request!
+            # to this end, the second header must be set to the secret value;
+            # if it is not set, assume the headers are not being configured by
+            # the proxy server
+            if not tags:
+                tags = []
+
+            # can never set admin tag via headers (should always be user-based)
+            forbidden_overrides = ("admin",)
+            tags += [tag for tag in self.request.headers.get("X-4Cat-Config-Tag").split(",") if tag not in forbidden_overrides]
+
+        return tags
 
     def __getattr__(self, item):
         """
