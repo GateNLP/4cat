@@ -14,19 +14,20 @@ from pathlib import Path
 import backend
 
 from flask import jsonify, request, render_template, render_template_string, redirect, send_file, url_for, flash, \
-	get_flashed_messages
+	get_flashed_messages, send_from_directory
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
 from webtool import app, db, log, openapi, limiter, queue, config
 from webtool.lib.helpers import error, setting_required
 
-from common.lib.exceptions import QueryParametersException, JobNotFoundException, QueryNeedsExplicitConfirmationException, QueryNeedsFurtherInputException
+from common.lib.exceptions import QueryParametersException, JobNotFoundException, \
+	QueryNeedsExplicitConfirmationException, QueryNeedsFurtherInputException, DataSetException
 from common.lib.queue import JobQueue
 from common.lib.job import Job
 from common.config_manager import ConfigWrapper
 from common.lib.dataset import DataSet
-from common.lib.helpers import UserInput, call_api
+from common.lib.helpers import UserInput, call_api, get_software_version
 from common.lib.user import User
 from backend.lib.worker import BasicWorker
 
@@ -202,6 +203,13 @@ def import_dataset():
 	}
 	"""
 	platform = request.headers.get("X-Zeeschuimer-Platform").split(".")[0]
+
+	# data source identifiers cannot start with a number but some do (such as
+	# 9gag and 4chan) so sanitise those numbers to account for this...
+	platform = platform.replace("1", "one").replace("2", "two").replace("3", "three").replace("4", "four") \
+		.replace("5", "five").replace("6", "six").replace("7", "seven").replace("8", "eight") \
+		.replace("9", "nine")
+
 	if not platform or platform not in backend.all_modules.datasources or platform not in config.get('datasources.enabled'):
 		return error(404, message="Unknown platform or source format")
 
@@ -337,6 +345,9 @@ def queue_dataset():
 	if request.form.to_dict().get("pseudonymise") in ("pseudonymise", "anonymise"):
 		sanitised_query["pseudonymise"] = request.form.to_dict().get("pseudonymise")
 
+	if request.form.to_dict().get("email-complete", False):
+		sanitised_query["email-complete"] = request.form.to_dict().get("email-user", False)
+
 	# unchecked checkboxes do not send data in html forms, so key will not exist if box is left unchecked
 	is_private = bool(request.form.get("make-private", False))
 
@@ -345,6 +356,7 @@ def queue_dataset():
 		current_user.remove_value("temp_session_code")
 
 	extension = search_worker.extension if hasattr(search_worker, "extension") else "csv"
+
 	dataset = DataSet(
 		parameters=sanitised_query,
 		db=db,
@@ -353,6 +365,12 @@ def queue_dataset():
 		is_private=is_private,
 		owner=current_user.get_id()
 	)
+
+	# this bit allows search workers to insist on the new dataset having a
+	# certain key. This is at the time of writing only used by the worker that
+	# imports 4CAT datasets from elsewhere
+	if hasattr(search_worker, "ensure_key"):
+		dataset.set_key(search_worker.ensure_key(sanitised_query))
 
 	if request.form.get("label"):
 		dataset.update_label(request.form.get("label"))
@@ -402,7 +420,7 @@ def check_dataset():
 
 	try:
 		dataset = DataSet(key=dataset_key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not current_user.can_access_dataset(dataset):
@@ -479,7 +497,7 @@ def edit_dataset_label(key):
 
 	try:
 		dataset = DataSet(key=dataset_key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not config.get("privileges.admin.can_manipulate_all_datasets") and not dataset.is_accessible_by(current_user, "owner"):
@@ -524,7 +542,7 @@ def convert_dataset(key):
 
 	try:
 		dataset = DataSet(key=dataset_key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not current_user.is_admin:
@@ -572,7 +590,7 @@ def nuke_dataset(key=None, reason=None):
 
 	try:
 		dataset = DataSet(key=dataset_key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not current_user.is_admin:
@@ -618,7 +636,8 @@ def nuke_dataset(key=None, reason=None):
 		return jsonify({"status": "success", "key": dataset.key})
 
 
-@app.route("/api/delete-dataset/<string:key>/")
+@app.route("/api/delete-dataset/", defaults={"key": None}, methods=["DELETE", "GET", "POST"])
+@app.route("/api/delete-dataset/<string:key>/", methods=["DELETE", "GET", "POST"])
 @api_ratelimit
 @login_required
 @openapi.endpoint("tool")
@@ -644,7 +663,7 @@ def delete_dataset(key=None):
 
 	try:
 		dataset = DataSet(key=dataset_key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not config.get("privileges.admin.can_manipulate_all_datasets") and not dataset.is_accessible_by(current_user, "owner"):
@@ -767,7 +786,7 @@ def erase_credentials(key=None):
 
 	try:
 		dataset = DataSet(key=dataset_key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not config.get("privileges.admin.can_manipulate_all_datasets") and not dataset.is_accessible_by(current_user, "owner"):
@@ -811,8 +830,16 @@ def remove_tag():
 
 	if tag in all_tags:
 		all_tags.remove(tag)
-		db.delete("settings", where={"tag": tag})
-		config.set("flask.tag_order", all_tags, tag="")
+
+	# all_tags is now our canonical list of tags
+	# clean up settings
+	# delete all tagged settings for tags that are no longer in use
+	configured_tags = [t["tag"] for t in db.fetchall("SELECT DISTINCT tag FROM settings")]
+	for configured_tag in configured_tags:
+		if configured_tag and configured_tag not in all_tags:
+			db.delete("settings", where={"tag": configured_tag})
+
+	config.set("flask.tag_order", all_tags, tag="")
 
 	if request.args.get("redirect") is not None:
 		flash("Tag removed.")
@@ -853,7 +880,7 @@ def add_dataset_owner(key=None, username=None, role=None):
 
 	try:
 		dataset = DataSet(key=dataset_key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not config.get("privileges.admin.can_manipulate_all_datasets") and not dataset.is_accessible_by(current_user, "owner"):
@@ -911,7 +938,7 @@ def remove_dataset_owner(key=None, username=None):
 
 	try:
 		dataset = DataSet(key=dataset_key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not config.get("privileges.admin.can_manipulate_all_datasets") and not dataset.is_accessible_by(current_user, "owner"):
@@ -967,7 +994,7 @@ def toggle_favourite(key):
 	"""
 	try:
 		dataset = DataSet(key=key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not current_user.can_access_dataset(dataset):
@@ -1007,7 +1034,7 @@ def toggle_private(key):
 	"""
 	try:
 		dataset = DataSet(key=key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Dataset does not exist.")
 
 	if not config.get("privileges.admin.can_manipulate_all_datasets") and not dataset.is_accessible_by(current_user, "owner"):
@@ -1083,7 +1110,7 @@ def queue_processor(key=None, processor=None):
 	# cover all bases - can only run processor on "parent" dataset
 	try:
 		dataset = DataSet(key=key, db=db)
-	except TypeError:
+	except DataSetException:
 		return error(404, error="Not a valid dataset key.")
 
 	if not config.get("privileges.admin.can_manipulate_all_datasets") and not current_user.can_access_dataset(dataset):
@@ -1099,6 +1126,9 @@ def queue_processor(key=None, processor=None):
 		options = UserInput.parse_all(available_processors[processor].get_options(dataset, current_user), request.form, silently_correct=False)
 	except QueryParametersException as e:
 		return error(400, error=str(e))
+
+	if request.form.to_dict().get("email-complete", False):
+		options["email-complete"] = request.form.to_dict().get("email-user", False)
 
 	# private or not is inherited from parent dataset
 	analysis = DataSet(parent=dataset.key,
@@ -1166,7 +1196,7 @@ def check_processor():
 	for key in keys:
 		try:
 			dataset = DataSet(key=key, db=db)
-		except TypeError:
+		except DataSetException:
 			continue
 
 		if not current_user.can_access_dataset(dataset):
@@ -1238,3 +1268,46 @@ def request_token():
 	else:
 		# show JSON response (by default)
 		return jsonify(token)
+
+@app.route("/api/export-packed-dataset/<string:key>/<string:component>/")
+@login_required
+@setting_required("privileges.can_export_datasets")
+def export_packed_dataset(key=None, component=None):
+	"""
+	Export dataset for importing in another 4CAT instance
+
+	:param key:
+	:param component:
+	:return:
+	"""
+	try:
+		dataset = DataSet(key=key, db=db)
+	except DataSetException:
+		return error(404, error="Dataset not found.")
+
+	if not current_user.can_access_dataset(dataset=dataset, role="owner"):
+		return error(403, error=f"You cannot export this dataset. {current_user}")
+
+	if not dataset.is_finished():
+		return error(403, error="You cannot export unfinished datasets.")
+
+	if component == "metadata":
+		metadata = db.fetchone("SELECT * FROM datasets WHERE key = %s", (dataset.key,))
+
+		# get 4CAT version (presumably to ensure export is compatible with import)
+		metadata["current_4CAT_version"] = get_software_version()
+		return jsonify(metadata)
+
+	elif component == "children":
+		children = [d["key"] for d in db.fetchall("SELECT key FROM datasets WHERE key_parent = %s AND is_finished = TRUE", (dataset.key,))]
+		return jsonify(children)
+
+	elif component in ("data", "log"):
+		filepath = dataset.get_results_path() if component == "data" else dataset.get_results_path().with_suffix(".log")
+		if not filepath.exists():		# def stream_data_content(datafile):
+			return error(404, error=f"File for {component} not found")
+		else:
+			return send_from_directory(directory=filepath.parent, path=filepath.name)
+
+	else:
+		return error(406, error="Dataset component unknown")

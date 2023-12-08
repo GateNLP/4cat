@@ -19,7 +19,7 @@ from webtool.views.api_tool import toggle_favourite, toggle_private, queue_proce
 
 import backend
 from common.lib.dataset import DataSet
-
+from common.lib.exceptions import DataSetException
 from common.config_manager import ConfigWrapper
 
 config = ConfigWrapper(config, user=current_user, request=request)
@@ -200,7 +200,7 @@ def get_mapped_result(key, subfile=None):
     """
     try:
         dataset = DataSet(key=key, db=db)
-    except TypeError:
+    except DataSetException:
         return error(404, error="Dataset not found.")
 
     if subfile:
@@ -239,35 +239,31 @@ def get_mapped_result(key, subfile=None):
         """
         writer = None
         buffer = io.StringIO()
-        with file.open() as infile:
-            for line in infile:
-                item = json.loads(line)
-                mapped_item = mapper(item)
-
-                # Add possible annotation items
-                if annotation_fields:
+        for mapped_item in dataset.iterate_items(
+                processor=dataset.get_own_processor(),
+                subfile=dataset.get_results_dir().joinpath(subfile) if subfile else None,
+                warn_unmappable=False):
+            if not writer:
+                fieldnames = mapped_item.keys()
+                if annotation_labels:
                     for label in annotation_labels:
-                        mapped_item[label] = item[label]
+                        if label not in fieldnames:
+                            fieldnames.append(label)
 
-                if not writer:
-                    fieldnames = mapped_item.keys()
-
-                    # Add possible annotation headers
-                    if annotation_labels:
-                        for label in annotation_labels:
-                            if label not in fieldnames:
-                                fieldnames.append(label)
-
-                    writer = csv.DictWriter(buffer, fieldnames=tuple(fieldnames))
-                    writer.writeheader()
-                    yield buffer.getvalue()
-                    buffer.truncate(0)
-                    buffer.seek(0)
-
-                writer.writerow(mapped_item)
+                writer = csv.DictWriter(buffer, fieldnames=tuple(fieldnames))
+                writer.writeheader()
                 yield buffer.getvalue()
                 buffer.truncate(0)
                 buffer.seek(0)
+
+            if annotation_fields:
+                for label in annotation_labels:
+                    mapped_item[label] = item[label]
+
+            writer.writerow(mapped_item)
+            yield buffer.getvalue()
+            buffer.truncate(0)
+            buffer.seek(0)
 
     disposition = 'attachment; filename="%s"' % file.with_suffix(".csv").name
     return app.response_class(stream_with_context(map_response()), mimetype="text/csv",
@@ -279,7 +275,7 @@ def get_mapped_result(key, subfile=None):
 def view_log(key):
     try:
         dataset = DataSet(key=key, db=db)
-    except TypeError:
+    except DataSetException:
         return error(404, error="Dataset not found.")
 
     if dataset.is_private and not (
@@ -323,7 +319,7 @@ def preview_items(key, subfile=None):
     """
     try:
         dataset = DataSet(key=key, db=db)
-    except TypeError:
+    except DataSetException:
         return error(404, error="Dataset not found.")
 
     if dataset.is_private and not (
@@ -362,7 +358,7 @@ def preview_items(key, subfile=None):
         rows = []
         subfile = dataset.get_results_dir().joinpath(subfile) if subfile else None
         try:
-            for row in dataset.iterate_items(subfile=subfile):
+            for row in dataset.iterate_items(subfile=subfile, warn_unmappable=False):
                 if len(rows) > preview_size:
                     break
 
@@ -491,7 +487,7 @@ def show_result(key):
     """
     try:
         dataset = DataSet(key=key, db=db)
-    except TypeError:
+    except DataSetException:
         return error(404)
 
     if not current_user.can_access_dataset(dataset):
@@ -625,7 +621,7 @@ def toggle_private_interactive(key):
 def keep_dataset(key):
     try:
         dataset = DataSet(key=key, db=db)
-    except TypeError:
+    except DataSetException:
         return error(404, message="Dataset not found.")
 
     if not config.get("expire.allow_optout"):

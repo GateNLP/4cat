@@ -1,10 +1,8 @@
-FROM python:3.8-slim AS compile-image
+FROM python:3.8 AS compile-image
 
 RUN apt-get update && apt install -y \
     # General requirements:
-    libpq-dev \
-    python3-dev \
-    python3-pip
+    libpq-dev
 
 # Set working directory
 WORKDIR /usr/src/app
@@ -19,10 +17,10 @@ COPY ./requirements.txt /usr/src/app/requirements.txt
 COPY ./setup.py /usr/src/app/setup.py
 COPY ./VERSION /usr/src/app/VERSION
 COPY ./README.md /usr/src/app/README.md
-RUN mkdir /usr/src/app/backend
-RUN mkdir /usr/src/app/webtool
-RUN mkdir /usr/src/app/datasources
-RUN pip3 install -r requirements.txt
+RUN mkdir /usr/src/app/backend && \
+    mkdir /usr/src/app/webtool && \
+    mkdir /usr/src/app/datasources && \
+    pip3 install -r requirements.txt
 
 # Install frontend Docker requirements
 RUN pip3 install gunicorn
@@ -33,13 +31,13 @@ COPY --from=compile-image /opt/venv /opt/venv
 # Make virtual env available
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt install -y \
+RUN apt-get update && apt-get install -y \
     curl \
     netcat-traditional \
     postgresql-client \
-    postgresql-server-dev-all \
     git \
-    ffmpeg
+    ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /usr/src/app

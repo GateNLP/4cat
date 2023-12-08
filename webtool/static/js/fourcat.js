@@ -253,7 +253,7 @@ const processor = {
             return;
         }
 
-        $.ajax(getRelativeURL('api/delete-dataset/'), {
+        $.ajax(getRelativeURL('api/delete-dataset/' + $(this).attr('data-key') + '/'), {
             method: 'DELETE',
             data: {key: $(this).attr('data-key')},
             success: function (json) {
@@ -263,7 +263,7 @@ const processor = {
                 if ($('.child-list.top-level li').length === 0) {
                     $('#child-tree-header').attr('aria-hidden', 'true').addClass('collapsed');
                 }
-                query.enable_form();
+                query.reset_form();
             },
             error: function (json) {
                 popup.alert('Could not delete dataset: ' + json.status, 'Error');
@@ -307,7 +307,7 @@ const query = {
         // Check status of query
         if ($('body.result-page').length > 0) {
             query.update_status();
-            setInterval(query.update_status, 1000);
+            setInterval(query.update_status, 1500);
 
             // Check processor queue
             query.check_processor_queue();
@@ -354,14 +354,20 @@ const query = {
     /**
      * Enable query form, so settings may be changed
      */
-    enable_form: function () {
-		$('#query-status .stop-link').remove();
-		$('#query-status .delete-link').remove();
-        $('#query-status .status_message .dots').html('');
-        $('#query-status .message').html('Enter dataset parameters to begin.');
+    enable_form: function (reset=false) {
+        if(reset) {
+            $('#query-status .stop-link').remove();
+            $('#query-status .delete-link').remove();
+            $('#query-status .status_message .dots').html('');
+            $('#query-status .message').html('Enter dataset parameters to begin.');
+            $('#query-form .datasource-extra-input').remove();
+        }
         $('#query-form fieldset').prop('disabled', false);
-        $('#query-form .datasource-extra-input').remove();
         $('#query-status').removeClass('active');
+    },
+
+    reset_form: function() {
+        query.enable_form(true);
     },
 
     /**
@@ -383,6 +389,7 @@ const query = {
 
         // Show loader
         query.check_search_queue();
+        query.enable_form();
 
         let form = $('#query-form');
         let formdata = new FormData(form[0]);
@@ -418,6 +425,7 @@ const query = {
 
         // Disable form
         $('html,body').scrollTop(200);
+        query.disable_form();
 
         // AJAX the query to the server
         // first just to validate - then for real (if validated)
@@ -433,8 +441,10 @@ const query = {
             })
             .then(function (response) {
                 if (response['status'] === 'error') {
+                    query.reset_form();
                     popup.alert(response['message'], 'Error');
                 } else if (response['status'] === 'confirm') {
+                    query.enable_form();
                     popup.confirm(response['message'], 'Confirm', function () {
                         // re-send, but this time for real
                         query.start({'frontend-confirm': true}, true);
@@ -445,6 +455,7 @@ const query = {
                 } else if (response['status'] === 'extra-form') {
                     // new form elements to fill in
                     // some fancy css juggling to make it obvious that these need to be completed
+                    query.enable_form();
                     $('#query-status .message').html('Enter dataset parameters to continue.');
                     let target_top = $('#datasource-form')[0].offsetTop + $('#datasource-form')[0].offsetHeight - 50;
 
@@ -459,7 +470,6 @@ const query = {
                         });
                     });
                 } else {
-                    query.disable_form();
                     $('#query-status .message').html('Query submitted, waiting for results');
                     query.query_key = response['key'];
                     query.check(query.query_key);
@@ -479,7 +489,8 @@ const query = {
                 }
             })
             .catch(function (e) {
-                popup.alert('4CAT could not process the file you are trying to upload.', 'Error');
+                query.enable_form();
+                popup.alert('4CAT could not process your dataset.', 'Error');
             });
     },
 
@@ -510,7 +521,7 @@ const query = {
                     let keyword = json.label;
 
                     $('#query-results').append('<li><a href="../results/' + json.key + '">' + keyword + ' (' + json.rows + ' items)</a></li>');
-                    query.enable_form();
+                    query.reset_form();
                     popup.alert('Query for \'' + keyword + '\' complete!', 'Success');
                 } else {
                     let dots = '';
@@ -588,7 +599,9 @@ const query = {
             return;
         }
 
-        let queued = $('.child-wrapper.running');
+        // first selector is top-level child datasets (always visible)
+        // second selector is children of children (only visible when expanded)
+        let queued = $('.top-level > .child-wrapper.running, div[aria-expanded=true] > ol > li.child-wrapper.running');
         if (queued.length === 0) {
             return;
         }
@@ -838,6 +851,16 @@ const query = {
             $(board_specific).prop('disabled', true);
             $('.form-element[data-board-specific*="' + board + '"]').prop('disabled', false);
             $('.form-element[data-board-specific*="' + board + '"]').show();
+        }
+
+        // there is one data source where the anonymisation and labeling
+        // controls are of no use...
+        if($('#query-form').hasClass('import_4cat')) {
+            $('.dataset-anonymisation').hide();
+            $('.dataset-labeling').hide();
+        } else {
+            $('.dataset-anonymisation').show();
+            $('.dataset-labeling').show();
         }
     },
 
@@ -1597,6 +1620,21 @@ const ui_helpers = {
                     }
                 });
             }
+        });
+
+        // special case - restart 4cat front-end
+        $('button[name=action][value=restart-frontend]').on('click', function(e) {
+            e.preventDefault();
+            const button = $('button[name=action][value=restart-frontend]');
+            const url = button.attr('data-url');
+            $('.button-container button').attr('disabled', 'disabled');
+            button.find('i').removeClass('fa-power-off').addClass('fa-sync-alt').addClass('fa-spin');
+            fetch(url, {method: 'POST'}).then(response => response.json()).then(response => {
+                popup.alert(response['message'], 'Front-end restart: ' + response['status']);
+            }).catch(e => {}).finally(() => {
+                button.find('i').removeClass('fa-sync-alt').removeClass('fa-spin').addClass('fa-power-off');
+                $('.button-container button').removeAttr('disabled');
+            });
         });
     },
 

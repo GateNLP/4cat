@@ -1,4 +1,5 @@
 # various temporary or downloaded files
+__pycache__/
 *.pyc
 *.pid
 *.log
