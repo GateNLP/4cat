@@ -61,7 +61,6 @@ packages = [
 	"wordcloud~=1.8",
 	"Authlib~=1.2.0",
 	"PyDrive~=1.3.1",
-	"videohash==3.0.1",
 	"videohash @ https://github.com/dale-wahl/videohash/archive/refs/heads/main.zip",
 	"vk_api",
 	"yt-dlp",
